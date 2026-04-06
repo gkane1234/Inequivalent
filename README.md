@@ -56,7 +56,7 @@ Before approaching this solution, consider the easier question of
 finding a way to make 24 using the four numbers 2,4,7,10. This is a
 classic question from the card game called the 24 game. To make 24 we
 can use the expression ((4 − 2) \* 7) + 10. We can also use the
-expression (10 − 7) \* (4 \* 2), or even (10 − 2) \* (7 − 4).
+expression (10 − 7) \* 4 \* 2, or even (10 − 2) \* (7 − 4).
 
 A brute force way of calculating such a solution could be to create all
 possible orderings of numbers, all possible orderings and selections of
