@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inequivalent Expression Solver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <h1>Inequivalent Expression Solver</h1>
+        <p>
+          Builds the set of algebraically inequivalent expressions on your device (up to 6
+          numbers), then searches for ways to hit a goal with +, −, ×, ÷ and parentheses.
+        </p>
+      </header>
+
+      <section class="panel" aria-labelledby="gen-heading">
+        <h2 id="gen-heading">Generation</h2>
+        <div class="progress-row">
+          <div class="bar" aria-hidden="true"><span id="progressFill"></span></div>
+          <div class="pct" id="progressPct">0%</div>
+        </div>
+        <div class="status-line" id="statusLine">Starting…</div>
+        <div class="level-pills" id="levelPills"></div>
+        <div class="actions">
+          <button type="button" class="ghost" id="regenBtn">Regenerate (clear cache)</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="solver-heading">
+        <h2 id="solver-heading">Solver</h2>
+
+        <div class="modes" role="tablist">
+          <button type="button" class="active" id="modeSpecific" data-mode="specific">
+            Specific Values
+          </button>
+          <button type="button" id="modeFind" data-mode="find">Find Values</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="field">
+            <span class="field-label">Number of values</span>
+            <div class="n-buttons" id="nButtons" role="group" aria-label="Number of values"></div>
+          </div>
+          <label class="field">
+            Goal
+            <input id="goal" type="text" inputmode="decimal" value="24" autocomplete="off" />
+          </label>
+          <label class="field">
+            Max solutions
+            <input id="maxSolutionsCap" type="text" inputmode="numeric" value="50" autocomplete="off" />
+          </label>
+        </div>
+
+        <div id="specificPanel">
+          <div class="grid-values" id="valueFields"></div>
+        </div>
+
+        <div id="findPanel" class="hidden">
+          <div class="row-2">
+            <label class="field">
+              Min value
+              <input id="minValue" type="text" inputmode="numeric" value="1" autocomplete="off" />
+            </label>
+            <label class="field">
+              Max value (exclusive)
+              <input id="maxValue" type="text" inputmode="numeric" value="15" autocomplete="off" />
+            </label>
+            <label class="field">
+              Min solutions (board)
+              <input id="minSolutions" type="text" inputmode="numeric" value="1" autocomplete="off" />
+            </label>
+            <label class="field">
+              Max solutions (board)
+              <input id="maxSolutions" type="text" inputmode="numeric" value="50" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="primary" id="runBtn" disabled>Solve</button>
+          <button type="button" class="ghost" id="randomBtn" disabled>Random example</button>
+        </div>
+        <div class="meta" id="solveMeta"></div>
+        <div class="results" id="results" aria-live="polite"></div>
+      </section>
+
+      <section class="panel explain" aria-labelledby="explain-heading">
+        <h2 id="explain-heading">How it works</h2>
+
+        <div class="explain-body">
+          <h3>The puzzle</h3>
+          <p>
+            To begin, consider a puzzle: you are given seven numbers — 300, 200, 100, 20, 10, 2, 1 —
+            with the goal to make 1000, using each number exactly once, the four basic operations, and
+            parentheses (no unary minus or multiplicative inversion).
+          </p>
+          <p>
+            Before that, try the easier classic: make <strong>24</strong> with
+            <strong>2, 4, 7, 10</strong> (the 24 game). One answer is
+            <code>((4 − 2) * 7) + 10</code>. Others include <code>(10 − 7) * 4 * 2</code> and
+            <code>(10 − 2) * (7 − 4)</code>.
+          </p>
+
+          <h3>Why not brute force</h3>
+          <p>
+            A brute-force approach would build every ordering of the numbers, every choice of
+            operations, and every placement of parentheses, then check whether each expression hits
+            the goal. For <em>n</em> numbers that space has size
+          </p>
+          <p class="formula"><em>n</em>! × 4<sup>(<em>n</em>−1)</sup> × (<em>n</em>−1)!</p>
+          <p>
+            For 4 numbers that is 9,216 expressions — doable. For 7 it is on the order of 14 billion —
+            not reasonable to check exhaustively.
+          </p>
+          <p>
+            So the real question is:
+            <strong>how many algebraically inequivalent expressions</strong> are there under these
+            constraints, and how do we store them so we can search efficiently?
+          </p>
+
+          <h3>Truncators (the filter)</h3>
+          <p>
+            Expressions are stored in reverse Polish notation (RPN) and evaluated with a stack. Brute
+            force solves hard 24-game boards like 3,3,7,7 — but it double-counts equivalents and gets
+            slow.
+          </p>
+          <p>
+            The filter that removes duplicates uses <strong>truncators</strong>: several lists of
+            randomly generated floats. Each candidate expression is evaluated on each truncator. The
+            result is looked up in a hash set of values already seen for that truncator. If the
+            expression looks new on enough truncators, it is kept as inequivalent.
+          </p>
+          <p>
+            The sizes of these sets begin <strong>1, 6, 68, 1170, …</strong> — the number of
+            inequivalent expressions in <em>n</em> variables with the four operations. That sequence
+            is
+            <a href="https://oeis.org/A140606" rel="noopener noreferrer" target="_blank"
+              >OEIS A140606</a
+            >.
+          </p>
+
+          <h3>Dynamic construction</h3>
+          <p>
+            Brute force still builds far more candidates than the final inequivalent count, and that
+            gap grows with <em>n</em>. The better approach is <strong>dynamic</strong>: build
+            <em>f</em>(<em>x</em><sub>1</sub>,…,<em>x</em><sub>n</sub>), the set of inequivalent
+            expressions on those variables, from smaller sets.
+          </p>
+          <p>
+            Define a <strong>naive product</strong> ⊕ on two such sets: combine every expression from
+            the left with every expression from the right using
+          </p>
+          <p class="formula">
+            { e<sub>x</sub> + e<sub>y</sub>, e<sub>x</sub> − e<sub>y</sub>, e<sub>y</sub> −
+            e<sub>x</sub>, e<sub>x</sub> × e<sub>y</sub>, e<sub>x</sub> / e<sub>y</sub>, e<sub>y</sub> /
+            e<sub>x</sub> }
+          </p>
+          <p>
+            (commutative ops once; non-commutative ops in both orders). Duplicates are removed
+            afterward by the truncator filter.
+          </p>
+          <p>
+            For two variables <em>a</em> and <em>b</em>:
+            <em>f(a)</em> ⊕ <em>f(b)</em> =
+            <code>{ a+b, a−b, b−a, ab, a/b, b/a }</code>, since <em>f(a) = {a}</em> and
+            <em>f(b) = {b}</em>.
+          </p>
+          <p>
+            For four variables <em>a,b,c,d</em>, combine 1+3 and 2+2 partitions over all ways to assign
+            variables to the groups, for example:
+          </p>
+          <ul class="explain-list">
+            <li><em>f(a)</em> ⊕ <em>f(b,c,d)</em>, … (and each singleton on the left)</li>
+            <li>
+              <em>f(a,b)</em> ⊕ <em>f(c,d)</em>, <em>f(a,c)</em> ⊕ <em>f(b,d)</em>,
+              <em>f(a,d)</em> ⊕ <em>f(b,c)</em>
+            </li>
+          </ul>
+          <p>
+            That candidate space is much smaller than full brute force. After filtering, the
+            inequivalent counts are:
+          </p>
+
+          <div class="table-wrap">
+            <table class="count-table">
+              <thead>
+                <tr>
+                  <th scope="col">n</th>
+                  <th scope="col">Inequivalent expressions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>1</td><td>1</td></tr>
+                <tr><td>2</td><td>6</td></tr>
+                <tr><td>3</td><td>68</td></tr>
+                <tr><td>4</td><td>1,170</td></tr>
+                <tr><td>5</td><td>27,142</td></tr>
+                <tr><td>6</td><td>793,002</td></tr>
+                <tr><td>7</td><td>27,914,126</td></tr>
+                <tr><td>8</td><td>1,150,212,810</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="explain-note">
+            OEIS
+            <a href="https://oeis.org/A140606" rel="noopener noreferrer" target="_blank">A140606</a>
+            / Counter sizes. This site generates through <strong>n=6</strong> in the browser; n=7–8
+            are shown for scale — the desktop Java project targets those larger sets.
+          </p>
+
+          <h3>Compression</h3>
+          <p>
+            For large <em>n</em>, storing every expression as a full object is expensive. The desktop
+            project packs each expression into a bitfield inside a <code>long</code>, then packs those
+            bitfields back-to-back into an array of longs so unused bits are not wasted. For seven
+            variables that cut the saved file from about <strong>1.7&nbsp;GB</strong> down to about
+            <strong>100&nbsp;MB</strong>, and load time from roughly 20 seconds to about 100&nbsp;ms.
+          </p>
+          <p>
+            This browser demo regenerates sets up to n=6 in memory and caches a compact binary form in
+            IndexedDB; the same packing idea is what makes the Java solver practical at n=7.
+          </p>
+
+          <h3>What the solver does with that set</h3>
+          <p>
+            Once the set for <em>n</em> exists, <strong>Specific Values</strong> plugs your numbers
+            into every inequivalent form and keeps those that equal the goal (up to your max).
+            <strong>Find Values</strong> picks random boards in a range and repeats that scan until
+            the number of hits falls in the range you asked for.
+          </p>
+          <p>
+            Same idea that found things like
+            <code>((((4/7)+(16*9))*14)+3) = 2027</code> from 3, 4, 7, 9, 14, 16 — only here the
+            generation for n≤6 runs locally in the page.
+          </p>
+
+          <h3>Try it for three numbers</h3>
+          <p class="explain-note">
+            These are the 68 inequivalent forms for three variables. Change a, b, c, and the goal —
+            results are ordered by how close each evaluation is to the goal. The full solver does the
+            same kind of scan over the much larger sets for n = 4…6.
+          </p>
+
+          <div class="toolbar demo-toolbar">
+            <label class="field">
+              a
+              <input id="demoA" type="text" inputmode="decimal" value="2" autocomplete="off" />
+            </label>
+            <label class="field">
+              b
+              <input id="demoB" type="text" inputmode="decimal" value="3" autocomplete="off" />
+            </label>
+            <label class="field">
+              c
+              <input id="demoC" type="text" inputmode="decimal" value="4" autocomplete="off" />
+            </label>
+            <label class="field">
+              Goal
+              <input id="demoGoal" type="text" inputmode="decimal" value="24" autocomplete="off" />
+            </label>
+          </div>
+          <ul class="demo-list" id="demoList" aria-live="polite"></ul>
+          <div class="meta" id="demoMeta">Matches: 0 of 68</div>
+        </div>
+      </section>
+
+      <footer class="note">
+        Generation runs entirely in your browser (Web Worker). Results for each n are cached in
+        IndexedDB so return visits skip regenerating. n=6 can take a while on first visit.
+      </footer>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

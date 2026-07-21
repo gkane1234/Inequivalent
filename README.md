@@ -7,14 +7,15 @@ Generates and allows exploration of the set of inequivalent expressions involvin
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
 
-## Table of Contents
+## Browser demo
 
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Development](#development)
-- [Acknowledgments](#acknowledgments)
-- [Appendix](#appendix)
+A client-side solver lives in [`web/`](web/): open that folder with any static file server. On first load it generates expression sets through **n=6** in a Web Worker (with a progress bar), caches them in IndexedDB, then lets you solve “Specific Values” or “Find Values” puzzles in the browser.
+
+```bash
+npx serve web -p 5173
+```
+
+
 
 ## Features
 
