@@ -63,17 +63,23 @@ public class Expression implements Serializable{
         @param values: the values of the expression.
         @param rounding: the number of decimal places to round the result to.
     */
-    public double evaluateWithValues(double[] values,int rounding) {
-        double[] newValues = new double[values.length];
-        for (byte i=0;i<valueOrder.length;i++) {
-            newValues[i]=values[this.valueOrder[i]];
+    public double evaluateWithValues(double[] values, int rounding) {
+        return evaluateWithValues(values, rounding, null, null);
+    }
+
+    /**
+     * Evaluate without allocating remap/stack when scratch buffers are provided.
+     * {@code remapScratch} length &gt;= valueOrder.length; {@code stackScratch} length &gt;= order.length.
+     */
+    public double evaluateWithValues(double[] values, int rounding,
+                                     double[] remapScratch, double[] stackScratch) {
+        double[] remapped = remapScratch != null && remapScratch.length >= valueOrder.length
+                ? remapScratch
+                : new double[valueOrder.length];
+        for (int i = 0; i < valueOrder.length; i++) {
+            remapped[i] = values[valueOrder[i] & 0xff];
         }
-        double val = this.evaluateRpn(newValues,rounding);
-
-        return val;
-
-
-        
+        return evaluateRpn(remapped, rounding, stackScratch);
     }
 
     @Override
@@ -87,32 +93,34 @@ public class Expression implements Serializable{
     @param values: the values of the expression.
     @param rounding: the number of decimal places to round the result to.
     */
-    private double evaluateRpn(double[] values,int rounding) {
-        
-        DoubleArrayStack stack = new DoubleArrayStack(this.order.length);
-        byte values_pointer =0;
-        byte operations_pointer = 0;
+    private double evaluateRpn(double[] values, int rounding, double[] stackScratch) {
+        double[] stack = stackScratch != null && stackScratch.length >= order.length
+                ? stackScratch
+                : new double[order.length];
+        int sp = 0;
+        int valuesPointer = 0;
+        int operationsPointer = 0;
+        Operation[] ops = Operation.getOperations();
 
-        for (boolean isNumber : this.order) {
-            if (isNumber){
-                stack.push(values[values_pointer++] );
+        for (boolean isNumber : order) {
+            if (isNumber) {
+                stack[sp++] = values[valuesPointer++];
             } else {
-                if (stack.size() < 2) {
+                if (sp < 2) {
                     throw new IllegalStateException("Invalid expression: " + this.toString());
                 }
-                double b = stack.pop();
-                double a = stack.pop();
-                
-                double result= Operation.getOperations()[operations[operations_pointer++]].apply(a, b);
+                double b = stack[--sp];
+                double a = stack[--sp];
+                double result = ops[operations[operationsPointer++]].apply(a, b);
                 if (Double.isNaN(result)) {
                     return result;
                 }
-                stack.push(result);
+                stack[sp++] = result;
             }
         }
-        double nonRounded = stack.pop();
-        //return nonRounded;
-        return Math.round(nonRounded * Math.pow(10, rounding)) / Math.pow(10,rounding);
+        double nonRounded = stack[--sp];
+        double factor = Math.pow(10, rounding);
+        return Math.round(nonRounded * factor) / factor;
     }
 
     public boolean equals(Expression expression) {

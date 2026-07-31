@@ -68,15 +68,17 @@ public class UnorderedPartition {
         blocks.remove(blocks.size() - 1);
     }
 
-    private static List<int[]> copy(List<List<Integer>> out){
-
-        List<int[]> part = new ArrayList<int[]>();
-        for (List<Integer> block : out) {
-            part.add(block.stream().mapToInt(Integer::intValue).toArray());
+    private static List<int[]> copy(List<List<Integer>> out) {
+        List<int[]> part = new ArrayList<>(out.size());
+        for (int b = 0; b < out.size(); b++) {
+            List<Integer> block = out.get(b);
+            int[] arr = new int[block.size()];
+            for (int i = 0; i < block.size(); i++) {
+                arr[i] = block.get(i);
+            }
+            part.add(arr);
         }
-        
         return part;
-
     }
 
     public static void main(String[] args) {
