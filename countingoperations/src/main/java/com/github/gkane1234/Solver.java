@@ -12,6 +12,7 @@ import javax.swing.SwingWorker;
     Solver class for finding solutions for a given goal using a set of values.
 
     It is a SwingWorker in order to allow for progress updates when used in the applet.
+    By default, expression sets are built with {@link ComSearchGenerator} (no truncator dedupe).
 */
 public class Solver extends SwingWorker<Void,String>{
     private static final int NUM_TRUNCATORS = 20;
@@ -35,6 +36,14 @@ public class Solver extends SwingWorker<Void,String>{
         @param compressed: a <code>boolean</code> representing whether to use compressed expression lists.
     */
     Solver(int numValues,boolean verbose, boolean load, CountingOperationsApplet applet, boolean compressed){
+        this(numValues, verbose, load, applet, compressed, true);
+    }
+
+    /**
+        @param useComSearch: if true, generate with {@link ComSearchGenerator}; otherwise {@link ExpressionDynamic}.
+    */
+    Solver(int numValues, boolean verbose, boolean load, CountingOperationsApplet applet,
+           boolean compressed, boolean useComSearch) {
         this.verbose = verbose;
         this.applet = applet;
         if (load) {
@@ -51,24 +60,39 @@ public class Solver extends SwingWorker<Void,String>{
                 if (verbose) {
                     broadcast("File not found, creating instead...");
                 }
-                solverSet = new ExpressionDynamic(numValues,ROUNDING,NUM_TRUNCATORS,null,verbose,compressed,true).getExpressionList();
-                if (compressed) {
-                    CompressedExpressionList compressedExpressionList = ExpressionCompression.compressExpressionList(solverSet);
-                    CompressedExpressionList.saveCompressed(compressedExpressionList,verbose);
-                    solverSet = compressedExpressionList;
-                } else {
-                    ExpressionSet.saveCompressed(solverSet,verbose);
-                }
-                    
+                solverSet = buildExpressionList(numValues, verbose, compressed, useComSearch);
+                saveExpressionList(solverSet, compressed, verbose);
             }
-            
         } else {
-            solverSet = new ExpressionDynamic(numValues,ROUNDING,NUM_TRUNCATORS,null,verbose,compressed,true).getExpressionList();
+            solverSet = buildExpressionList(numValues, verbose, compressed, useComSearch);
         }
         if (verbose) {
             broadcast("Loaded "+solverSet.getNumExpressions()+" expressions.");
         }
         this.numValues=numValues;
+    }
+
+    private ExpressionList buildExpressionList(int numValues, boolean verbose,
+                                               boolean compressed, boolean useComSearch) {
+        if (useComSearch) {
+            if (verbose) {
+                broadcast("Generating expressions with ComSearch...");
+            }
+            return new ComSearchGenerator(numValues).toExpressionList();
+        }
+        return new ExpressionDynamic(numValues, ROUNDING, NUM_TRUNCATORS, null, verbose, compressed, true)
+                .getExpressionList();
+    }
+
+    private void saveExpressionList(ExpressionList list, boolean compressed, boolean verbose) {
+        if (compressed) {
+            CompressedExpressionList compressedExpressionList =
+                    ExpressionCompression.compressExpressionList(list);
+            CompressedExpressionList.saveCompressed(compressedExpressionList, verbose);
+            solverSet = compressedExpressionList;
+        } else {
+            ExpressionList.saveCompressed(list, verbose);
+        }
     }
     @Override
     protected Void doInBackground() {
@@ -92,7 +116,25 @@ public class Solver extends SwingWorker<Void,String>{
         @return a <code>SolutionSet</code> representing the solutions found.
     */
     public SolutionList findAllSolutions(double[] values, double goal,int maxSolutions) {
-        return ExpressionSet.findSolutions(solverSet, values, goal, Solver.ROUNDING, maxSolutions, verbose);
+        return ExpressionList.findSolutions(solverSet, values, goal, Solver.ROUNDING, maxSolutions, verbose);
+    }
+
+    /**
+     * Solve by streaming ComSearch expressions (does not use {@link #solverSet}).
+     * Useful when you do not want to materialize the full expression list first.
+     */
+    public SolutionList findAllSolutionsStreaming(double[] values, double goal, int maxSolutions) {
+        SolutionList solutions = new SolutionList(values, goal);
+        new ComSearchGenerator(numValues).generate(expression -> {
+            if (solutions.getNumSolutions() >= maxSolutions) {
+                return;
+            }
+            double value = expression.evaluateWithValues(values, ROUNDING);
+            if (equal(value, goal)) {
+                solutions.addEvaluatedExpression(new EvaluatedExpression(expression, values, value));
+            }
+        });
+        return solutions;
     }
     /**
         Finds all solutions for a given goal using a set of values.

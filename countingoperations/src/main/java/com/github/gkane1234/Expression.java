@@ -189,15 +189,20 @@ public class Expression implements Serializable{
      */
 
     private static Expression combineExpressions(Expression expr1, Expression expr2, byte opCode) {
-        
-        byte[] newValueOrder = combine(expr1.valueOrder,expr2.valueOrder);
-        byte[] newOperations = combineWithExtraSpot(expr1.operations,expr2.operations);
-        newOperations[newOperations.length-1]=opCode;
-        boolean[] newOrder =combineWithExtraSpot(expr1.order,expr2.order);
-        newOrder[newOrder.length-1]=false;
+        return combineWithOp(expr1, expr2, opCode);
+    }
 
+    /**
+     * Combines two expressions with a single binary operation (RPN append).
+     * Op codes: 0 +, 1 -, 2 *, 3 /.
+     */
+    public static Expression combineWithOp(Expression expr1, Expression expr2, byte opCode) {
+        byte[] newValueOrder = combine(expr1.valueOrder, expr2.valueOrder);
+        byte[] newOperations = combineWithExtraSpot(expr1.operations, expr2.operations);
+        newOperations[newOperations.length - 1] = opCode;
+        boolean[] newOrder = combineWithExtraSpot(expr1.order, expr2.order);
+        newOrder[newOrder.length - 1] = false;
         return new Expression(newValueOrder, newOperations, newOrder);
-
     }
     /**
         Combines two byte arrays.
