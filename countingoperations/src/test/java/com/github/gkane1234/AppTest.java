@@ -1,17 +1,11 @@
 package com.github.gkane1234;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
-/**
- * Legacy compression suite; bit-packing roundtrips are covered elsewhere.
- * Kept ignored so surefire can compile this package.
- */
+/** Placeholder so the test package stays valid. */
 public class AppTest {
-
     @Test
-    @Ignore("ExpressionCompression roundtrip is not reliable for all ComSearch forms yet")
-    public void testExpressionCompression() {
-        // intentionally empty
+    public void counterN2() {
+        org.junit.Assert.assertEquals(6, Counter.run(2).intValue());
     }
 }

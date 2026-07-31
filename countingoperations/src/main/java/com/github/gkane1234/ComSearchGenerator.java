@@ -20,15 +20,25 @@ public class ComSearchGenerator {
     public static final byte OP_DIV = 3;
 
     private final int n;
+    private volatile boolean cancelled;
 
     public ComSearchGenerator(int n) {
         this.n = n;
+    }
+
+    public void cancel() {
+        cancelled = true;
+    }
+
+    public boolean isCancelled() {
+        return cancelled;
     }
 
     public void generate(Consumer<Expression> out) {
         if (n < 1) {
             throw new IllegalArgumentException("n must be >= 1");
         }
+        cancelled = false;
         int[] leaves = new int[n];
         for (int i = 0; i < n; i++) {
             leaves[i] = i;
@@ -39,14 +49,19 @@ public class ComSearchGenerator {
         }
 
         Consumer<Expression> withOpposite = e -> {
+            if (cancelled) {
+                return;
+            }
             out.accept(e);
-            if (containsOp(e, OP_SUB)) {
+            if (!cancelled && containsOp(e, OP_SUB)) {
                 out.accept(negate(e));
             }
         };
 
         genAdd(leaves, withOpposite);
-        genMul(leaves, withOpposite);
+        if (!cancelled) {
+            genMul(leaves, withOpposite);
+        }
     }
 
     /**
@@ -63,6 +78,9 @@ public class ComSearchGenerator {
             }
             expressions[count[0]++] = e;
         });
+        if (cancelled) {
+            throw new IllegalStateException("ComSearch generation was cancelled");
+        }
         if (count[0] != expected) {
             throw new IllegalStateException(
                     "ComSearch emitted " + count[0] + " expressions, expected " + expected);
@@ -71,41 +89,62 @@ public class ComSearchGenerator {
     }
 
     public void genAdd(int[] leaves, Consumer<Expression> out) {
+        if (cancelled) {
+            return;
+        }
         if (leaves.length == 1) {
             out.accept(leaf(leaves[0]));
             return;
         }
 
         UnorderedPartition.forEach(leaves, partition -> {
+            if (cancelled) {
+                return;
+            }
             List<List<Expression>> childLists = new ArrayList<>(partition.size());
             for (int[] block : partition) {
+                if (cancelled) {
+                    return;
+                }
                 List<Expression> exprs = new ArrayList<>();
                 genMul(block, exprs::add);
                 childLists.add(exprs);
             }
             forEachCartesian(childLists, children -> combineAdditive(children, out));
-        });
+        }, () -> cancelled);
     }
 
     public void genMul(int[] leaves, Consumer<Expression> out) {
+        if (cancelled) {
+            return;
+        }
         if (leaves.length == 1) {
             out.accept(leaf(leaves[0]));
             return;
         }
 
         UnorderedPartition.forEach(leaves, partition -> {
+            if (cancelled) {
+                return;
+            }
             List<List<Expression>> childLists = new ArrayList<>(partition.size());
             for (int[] block : partition) {
+                if (cancelled) {
+                    return;
+                }
                 List<Expression> exprs = new ArrayList<>();
                 genAdd(block, exprs::add);
                 childLists.add(exprs);
             }
             forEachCartesian(childLists, children -> combineMultiplicative(children, out));
-        });
+        }, () -> cancelled);
     }
 
     /** Min-leaf child fixed in P; other children free → 2^{g-1} additive forms. */
     void combineAdditive(List<Expression> children, Consumer<Expression> out) {
+        if (cancelled) {
+            return;
+        }
         int g = children.size();
         int minIndex = 0;
         int min = minLeaf(children.get(0));
@@ -119,6 +158,9 @@ public class ComSearchGenerator {
 
         int free = g - 1;
         for (int freeMask = 0; freeMask < (1 << free); freeMask++) {
+            if (cancelled) {
+                return;
+            }
             List<Expression> positive = new ArrayList<>();
             List<Expression> negative = new ArrayList<>();
             positive.add(children.get(minIndex));
@@ -148,8 +190,14 @@ public class ComSearchGenerator {
 
     /** Every nonempty numerator → 2^g-1 multiplicative forms. */
     void combineMultiplicative(List<Expression> children, Consumer<Expression> out) {
+        if (cancelled) {
+            return;
+        }
         int g = children.size();
         for (int mask = 1; mask < (1 << g); mask++) {
+            if (cancelled) {
+                return;
+            }
             List<Expression> numer = new ArrayList<>();
             List<Expression> denom = new ArrayList<>();
             for (int b = 0; b < g; b++) {
@@ -298,19 +346,25 @@ public class ComSearchGenerator {
         return min;
     }
 
-    private static void forEachCartesian(List<List<Expression>> lists,
-                                         Consumer<List<Expression>> out) {
+    private void forEachCartesian(List<List<Expression>> lists,
+                                  Consumer<List<Expression>> out) {
         forEachCartesian(lists, 0, new ArrayList<>(lists.size()), out);
     }
 
-    private static void forEachCartesian(List<List<Expression>> lists, int index,
-                                         List<Expression> current,
-                                         Consumer<List<Expression>> out) {
+    private void forEachCartesian(List<List<Expression>> lists, int index,
+                                  List<Expression> current,
+                                  Consumer<List<Expression>> out) {
+        if (cancelled) {
+            return;
+        }
         if (index == lists.size()) {
             out.accept(new ArrayList<>(current));
             return;
         }
         for (Expression expr : lists.get(index)) {
+            if (cancelled) {
+                return;
+            }
             current.add(expr);
             forEachCartesian(lists, index + 1, current, out);
             current.remove(current.size() - 1);
