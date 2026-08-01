@@ -1,30 +1,64 @@
 package com.github.gkane1234;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
  * Streams ComSearch expressions and reports those that hit the goal.
  * Supports cooperative cancellation so a UI can stop without wiping results.
+ *
+ * <p>Uses eval-during-generate with parallel root partition jobs: numeric values
+ * are computed while combining, and {@link Expression} objects are built only for hits.
+ * Hits are reported as soon as they are found — you do not wait for the full
+ * enumeration to finish.
  */
 public class Solver {
     public static final int ROUNDING = 9;
     private static final double TOLERANCE = 1e-5;
 
+    /**
+     * Above this, root-partition parallelism is forced off. Large n has huge partition
+     * counts; even a bounded pool adds memory pressure, and serial streaming is safer.
+     */
+    public static final int PARALLEL_MAX_N = 10;
+
     private final int numValues;
+    private final int parallelism;
     private final ComSearchGenerator generator;
+    private final Object callbackLock = new Object();
 
     public Solver(int numValues) {
+        this(numValues, defaultParallelism(numValues));
+    }
+
+    public Solver(int numValues, int parallelism) {
         if (numValues < 1) {
             throw new IllegalArgumentException("numValues must be >= 1");
         }
+        if (parallelism < 1) {
+            throw new IllegalArgumentException("parallelism must be >= 1");
+        }
         this.numValues = numValues;
+        // Ignore requested parallelism for large n — see PARALLEL_MAX_N.
+        this.parallelism = numValues > PARALLEL_MAX_N ? 1 : parallelism;
         this.generator = new ComSearchGenerator(numValues);
+    }
+
+    private static int defaultParallelism(int numValues) {
+        if (numValues > PARALLEL_MAX_N) {
+            return 1;
+        }
+        // Root partition jobs are coarse and uneven; past ~4 workers, GC/contention
+        // usually outweighs extra parallelism on current heap-heavy combine path.
+        return Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors()));
     }
 
     public int getNumValues() {
         return numValues;
+    }
+
+    public int getParallelism() {
+        return parallelism;
     }
 
     public void requestStop() {
@@ -33,10 +67,10 @@ public class Solver {
 
     /** Running totals from a streaming search. */
     public static final class SearchStats {
-        public final int found;
-        public final int checked;
+        public final long found;
+        public final long checked;
 
-        public SearchStats(int found, int checked) {
+        public SearchStats(long found, long checked) {
             this.found = found;
             this.checked = checked;
         }
@@ -51,11 +85,9 @@ public class Solver {
     }
 
     /**
-     * Enumerate all ComSearch expressions, invoke {@code onFound} for each match.
-     * {@code onProgress} is called periodically and on each hit with live counts.
-     *
-     * <p>Uses a fast RPN evaluator with reused buffers and caches subexpression
-     * values by identity (memoized generator shares Expression instances).
+     * Enumerate ComSearch expressions in order, invoke {@code onFound} for each match
+     * as soon as it is discovered. Stops early if {@code maxSolutions} is reached or
+     * {@link #requestStop()} is called — remaining expressions are simply not visited.
      */
     public SearchStats findSolutionsStreaming(double[] values, double goal, int maxSolutions,
                                               Consumer<EvaluatedExpression> onFound,
@@ -64,52 +96,51 @@ public class Solver {
             throw new IllegalArgumentException(
                     "expected " + numValues + " values, got " + values.length);
         }
-        int[] found = {0};
-        int[] checked = {0};
-        double[] remapScratch = new double[numValues];
-        double[] stackScratch = new double[Math.max(8, numValues * 4)];
-        Map<Expression, Double> valueCache = new IdentityHashMap<>();
+        AtomicLong found = new AtomicLong();
+        AtomicLong checked = new AtomicLong();
+        final double roundFactor = Math.pow(10, ROUNDING);
+        // Progress less often for large n so UI/callback overhead stays small.
+        final long progressEvery = numValues >= 9 ? 100_000L : 2_000L;
 
-        generator.generate(expression -> {
-            if (found[0] >= maxSolutions) {
+        generator.search(values, (rawValue, materialize) -> {
+            if (found.get() >= maxSolutions || generator.isCancelled()) {
                 generator.cancel();
                 return;
             }
-            checked[0]++;
-            double value = evalCached(expression, values, valueCache, remapScratch, stackScratch);
+            long c = checked.incrementAndGet();
+            double value = round(rawValue, roundFactor);
             if (equal(value, goal)) {
-                onFound.accept(new EvaluatedExpression(expression, values, value));
-                found[0]++;
-                if (onProgress != null) {
-                    onProgress.accept(new SearchStats(found[0], checked[0]));
+                // Materialize synchronously while generator scratch state is valid.
+                Expression expression = materialize.get();
+                EvaluatedExpression hit = new EvaluatedExpression(expression, values, value);
+                synchronized (callbackLock) {
+                    if (found.get() >= maxSolutions) {
+                        generator.cancel();
+                        return;
+                    }
+                    long f = found.incrementAndGet();
+                    onFound.accept(hit);
+                    if (onProgress != null) {
+                        onProgress.accept(new SearchStats(f, checked.get()));
+                    }
+                    if (f >= maxSolutions) {
+                        generator.cancel();
+                    }
                 }
-                if (found[0] >= maxSolutions) {
-                    generator.cancel();
+            } else if (onProgress != null && c % progressEvery == 0) {
+                synchronized (callbackLock) {
+                    onProgress.accept(new SearchStats(found.get(), checked.get()));
                 }
-            } else if (onProgress != null && checked[0] % 2000 == 0) {
-                onProgress.accept(new SearchStats(found[0], checked[0]));
             }
-        });
-        SearchStats finalStats = new SearchStats(found[0], checked[0]);
+        }, parallelism);
+
+        SearchStats finalStats = new SearchStats(found.get(), checked.get());
         if (onProgress != null) {
-            onProgress.accept(finalStats);
+            synchronized (callbackLock) {
+                onProgress.accept(finalStats);
+            }
         }
         return finalStats;
-    }
-
-    private static double evalCached(Expression expression, double[] values,
-                                     Map<Expression, Double> cache,
-                                     double[] remapScratch, double[] stackScratch) {
-        Double cached = cache.get(expression);
-        if (cached != null) {
-            return cached;
-        }
-        double value = expression.evaluateWithValues(values, ROUNDING, remapScratch, stackScratch);
-        // Cache only modest-size DAGs; unbounded IdentityHashMap can grow with every root expr.
-        if (expression.valueOrder.length <= 4) {
-            cache.put(expression, value);
-        }
-        return value;
     }
 
     public SearchStats findSolutionsStreaming(double[] values, double goal, int maxSolutions,
@@ -123,5 +154,12 @@ public class Solver {
 
     public static boolean equal(double a, double b) {
         return Math.abs(a - b) <= TOLERANCE;
+    }
+
+    private static double round(double value, double factor) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            return value;
+        }
+        return Math.round(value * factor) / factor;
     }
 }

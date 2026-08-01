@@ -127,35 +127,86 @@ public class Expression implements Serializable{
         return Arrays.equals(this.valueOrder, expression.valueOrder) && Arrays.equals(this.operations, expression.operations) && Arrays.equals(this.order, expression.order);
     }
     /**
-        Converts the expression to a parenthetical string.
-        @param expression: the expression to convert.
-    */
+     * Pretty-print with only the parentheses required by operator precedence
+     * (so {@code (a+b)*c} stays parenthesized, but {@code (a+b)+c} becomes {@code a+b+c}).
+     */
     public static String convertToParenthetical(Expression expression) {
-        
-        Stack<String> stack = new Stack<>();
-        byte values_pointer =0;
-        byte operations_pointer = 0;
+        return formatInfix(expression, i -> String.valueOf(expression.valueOrder[i] & 0xff));
+    }
 
-        
+    /**
+     * Same precedence rules as {@link #convertToParenthetical}, but leaf text comes
+     * from {@code leafText} (e.g. concrete values for {@link EvaluatedExpression#display()}).
+     */
+    public static String formatInfix(Expression expression,
+                                    java.util.function.IntFunction<String> leafText) {
+        ArrayStack<InfixFrag> stack = new ArrayStack<>(expression.order.length);
+        int valuesPointer = 0;
+        int operationsPointer = 0;
         for (boolean isNumber : expression.order) {
             if (isNumber) {
-                if (values_pointer>=expression.valueOrder.length) {
-                    throw new IllegalStateException("Invalid expression: " + Arrays.toString(expression.order));
+                if (valuesPointer >= expression.valueOrder.length) {
+                    throw new IllegalStateException(
+                            "Invalid expression: " + Arrays.toString(expression.order));
                 }
-                stack.push(String.valueOf(expression.valueOrder[values_pointer++]));
+                stack.push(InfixFrag.leaf(leafText.apply(valuesPointer++)));
             } else {
-                if (operations_pointer>=expression.operations.length) {
-                    throw new IllegalStateException("Invalid expression: " + Arrays.toString(expression.order));
+                if (operationsPointer >= expression.operations.length) {
+                    throw new IllegalStateException(
+                            "Invalid expression: " + Arrays.toString(expression.order));
                 }
-                byte opCode = expression.operations[operations_pointer++];
-                String b = stack.pop();
-                String a = stack.pop();
-                String combinedExpression = "("+a+String.valueOf(Operation.getOperations()[opCode])+b+")";
-                stack.push(combinedExpression);
-            
-            }   
+                byte op = expression.operations[operationsPointer++];
+                InfixFrag b = stack.pop();
+                InfixFrag a = stack.pop();
+                stack.push(InfixFrag.combine(a, b, op));
+            }
         }
-        return stack.pop();
+        return stack.pop().text;
+    }
+
+    private static final class InfixFrag {
+        final String text;
+        /** 0 = atom, 1 = +/-, 2 = * or /. */
+        final int precedence;
+
+        private InfixFrag(String text, int precedence) {
+            this.text = text;
+            this.precedence = precedence;
+        }
+
+        static InfixFrag leaf(String text) {
+            return new InfixFrag(text, 0);
+        }
+
+        static InfixFrag combine(InfixFrag left, InfixFrag right, byte op) {
+            int prec = precedenceOf(op);
+            char symbol = Operation.getOperations()[op].getName();
+            String a = needsParens(left, prec, true) ? "(" + left.text + ")" : left.text;
+            String b = needsParens(right, prec, false) ? "(" + right.text + ")" : right.text;
+            return new InfixFrag(a + symbol + b, prec);
+        }
+
+        private static int precedenceOf(byte op) {
+            // + - lower than * /
+            return (op == 0 || op == 1) ? 1 : 2;
+        }
+
+        /**
+         * Left-associative ops: left child at same precedence needs no parens;
+         * right child at same (or lower) precedence does, so {@code a-(b-c)} stays clear.
+         */
+        private static boolean needsParens(InfixFrag child, int parentPrec, boolean isLeft) {
+            if (child.precedence == 0) {
+                return false;
+            }
+            if (child.precedence < parentPrec) {
+                return true;
+            }
+            if (child.precedence > parentPrec) {
+                return false;
+            }
+            return !isLeft;
+        }
     }
 
     /**

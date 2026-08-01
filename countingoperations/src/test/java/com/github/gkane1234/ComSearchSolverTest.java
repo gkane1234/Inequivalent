@@ -1,6 +1,7 @@
 package com.github.gkane1234;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -20,11 +21,50 @@ public class ComSearchSolverTest {
     @Test
     public void streamingSolveFinds24Game() {
         Solver solver = new Solver(4);
-        List<EvaluatedExpression> found = new ArrayList<>();
-        int count = solver.findSolutionsStreaming(
+        List<EvaluatedExpression> found = Collections.synchronizedList(new ArrayList<>());
+        Solver.SearchStats stats = solver.findSolutionsStreaming(
                 new double[] {2, 4, 7, 10}, 24, 50, found::add);
-        Assert.assertTrue("expected solutions for 2,4,7,10 → 24", count > 0);
-        Assert.assertEquals(count, found.size());
+        Assert.assertTrue("expected solutions for 2,4,7,10 → 24", stats.found > 0);
+        Assert.assertEquals(found.size(), stats.found);
+        Assert.assertTrue(stats.checked >= stats.found);
+        Assert.assertTrue(stats.hitPercent() > 0);
+    }
+
+    @Test
+    public void evalDuringGenerateMatchesExpressionEval() {
+        double[] values = {2, 4, 7, 10};
+        double factor = Math.pow(10, Solver.ROUNDING);
+        AtomicInteger checked = new AtomicInteger();
+        new ComSearchGenerator(4).search(values, (raw, materialize) -> {
+            checked.incrementAndGet();
+            double rounded = Double.isNaN(raw) || Double.isInfinite(raw)
+                    ? raw
+                    : Math.round(raw * factor) / factor;
+            Expression expr = materialize.get();
+            double fromExpr = expr.evaluateWithValues(values, Solver.ROUNDING);
+            if (Double.isNaN(rounded) && Double.isNaN(fromExpr)) {
+                return;
+            }
+            Assert.assertTrue(
+                    "value mismatch for " + expr,
+                    Solver.equal(rounded, fromExpr));
+        }, 1);
+        Assert.assertEquals(Counter.run(4).intValue(), checked.get());
+    }
+
+    @Test
+    public void parallelSearchMatchesSerialCounts() {
+        double[] values = {1, 2, 3, 4, 5};
+        double goal = 10;
+        Solver serial = new Solver(5, 1);
+        Solver parallel = new Solver(5, Math.max(2, Runtime.getRuntime().availableProcessors()));
+        Solver.SearchStats serialStats = serial.findSolutionsStreaming(
+                values, goal, Integer.MAX_VALUE, e -> {});
+        Solver.SearchStats parallelStats = parallel.findSolutionsStreaming(
+                values, goal, Integer.MAX_VALUE, e -> {});
+        Assert.assertEquals(Counter.run(5).longValue(), serialStats.checked);
+        Assert.assertEquals(serialStats.checked, parallelStats.checked);
+        Assert.assertEquals(serialStats.found, parallelStats.found);
     }
 
     @Test
@@ -40,7 +80,7 @@ public class ComSearchSolverTest {
             solver.requestStop();
         });
         stopper.start();
-        solver.findSolutionsStreaming(
+        Solver.SearchStats stats = solver.findSolutionsStreaming(
                 new double[] {1, 2, 3, 4, 5}, 10, Integer.MAX_VALUE,
                 e -> found.incrementAndGet());
         try {
@@ -48,7 +88,18 @@ public class ComSearchSolverTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        // Stop is cooperative; we mainly assert it returns without error.
-        Assert.assertTrue(found.get() >= 0);
+        Assert.assertTrue(stats.checked >= 0);
+        Assert.assertEquals(found.get(), stats.found);
     }
+
+    @Test
+    public void largeNStreamsWithoutMaterializingChildLists() {
+        // n=9 used to OOM by collecting full child expression lists.
+        Solver solver = new Solver(9, 1);
+        Solver.SearchStats stats = solver.findSolutionsStreaming(
+                new double[] {1, 2, 3, 4, 5, 6, 7, 8, 9}, 100, 1, e -> {});
+        Assert.assertEquals(1, stats.found);
+        Assert.assertTrue(stats.checked >= 1);
+    }
+
 }
