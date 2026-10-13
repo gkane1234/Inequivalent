@@ -4,6 +4,8 @@
 
 Generates and allows exploration of the set of inequivalent expressions involving N variables under a specific set of operations.
 
+This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). Appendix A of that paper gives the number of inequivalent expressions on n variables under the four arithmetic operations: 1, 6, 68, 1170, 27142, 793002, ….
+
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
 
@@ -171,7 +173,7 @@ Current goals:
 Other work in the area:
 [The OEIS page that has the values as well as the C code for generating the number of expressions](https://oeis.org/A140606)
 
-[A paper that details a method of enumerating inequivalent expressions without the need of a filter, used for a task in NLP](https://arxiv.org/pdf/2210.07017)
+[ComSearch](https://arxiv.org/pdf/2210.07017) enumerates inequivalent expressions without a stochastic filter, for a math-word-problem task. The counts in its Appendix A are the result recreated here.
 
 [A paper that details a counting algorithm for inequivalent expressions over the 4 standard operations with additive inversion](https://arxiv.org/pdf/2405.13928)
 
