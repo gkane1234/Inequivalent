@@ -4,10 +4,30 @@
 
 Generates and allows exploration of the set of inequivalent expressions involving N variables under a specific set of operations.
 
-This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). Appendix A of that paper gives the number of inequivalent expressions on n variables under the four arithmetic operations: 1, 6, 68, 1170, 27142, 793002, ….
-
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
+This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The shared result is the size of the set, not their search algorithm or their math-word-problem ranker.
+
+## How this matches ComSearch
+
+Appendix A of that paper builds the exponential generating function for inequivalent expressions on n labeled variables using only addition, subtraction, multiplication, and division. No unary minus. Equation (20) is
+
+1, 6, 68, 1170, 27142, 793002, 27914126, …
+
+Those are the sizes this repository checks. `web/lib/counter.js` stores that prefix through n=7. The Java and Python `Counter` programs compute the same numbers from the [OEIS A140606](https://oeis.org/A140606) recurrence. Generation is accepted when the set for n has that many expressions: the browser check prints them for n≤6, and the 7-variable solver reports 27,914,126 expressions, the seventh term.
+
+The expressions are the same kind of object. Both sides use n distinct values, the four operations, and parentheses, and treat two expressions as the same when algebra says they are (commutativity, associativity, and rewriting such as a−(b−c) versus a−b+c).
+
+The methods are not the same. ComSearch Appendix D enumerates one canonical skeleton per class, so each inequivalent expression is produced once. This repository builds a much larger candidate pool by dynamic programming, then drops duplicates with random truncators. A matching count means the filter kept a set of the paper’s size. It does not mean each kept expression is the paper’s representative. With too few truncators the filter also drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
+
+## Following the paper more closely
+
+1. Enumerate Appendix D skeletons instead of filtering. One representative per class, split into general addition (outer + or −) and general multiplication (outer × or ÷), removes the truncator collisions and the RocksDB seen-set.
+2. Treat a generated expression as correct only when it is that representative, not only when the set size matches Equation (20).
+3. Point the counters at Appendix A. `Counter.java` still says the proof link on the OEIS page is dead; that appendix is the derivation of this sequence.
+4. Leave the weak-supervision ranker out of this claim. ComSearch then trains math-word-problem solvers. This repository stops at the expression set and the goal search.
+
+A follow-up, once the enumeration matches Appendix D, is the paper’s false-matching problem. Several inequivalent expressions can evaluate to the same goal, and only some of them are the intended equation. The solver here already lists those hits (the 24-game examples are the small case). Ranking them, instead of returning every hit, is the next piece of the same paper. The 2024 counting paper cited below is a different extension: the same four operations plus additive inversion.
 
 ## Browser demo
 
@@ -164,7 +184,7 @@ The last optimization was to implement a simple hash set using RocksDB which all
 Current goals:
 
 1. Generating the expressions for 8. Napkin math suggests that using the current method the compressed saved file would take up about 6 gb, however the database hash sets would use around 400 gb during the generation process and the actual calculation would take no less than 300 hours
-2. Implementing the enumeration approach. There is a paper that details generating this list of inequivalent expressions directly using a combinatorial approach. This seems like a nicer way to approach the problem, however I have been unable to figure out how to do this works.
+2. Replace the truncator filter with the ComSearch Appendix D enumeration, described above.
 3. Continue improving the UI. Right now it looks very barebones however it still does what it needs to.
 
 
