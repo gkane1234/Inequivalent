@@ -6,7 +6,7 @@ Generates and allows exploration of the set of inequivalent expressions involvin
 
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
-This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The counters run the same counting algorithm as Appendix A. The expression generator does not run their skeleton enumeration.
+This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The counters run the counting algorithm from Appendix A. `ExpressionPowerSet` in `Python_Version/operation_counting.py` runs the enumeration, and yields each expression as it is built.
 
 ## How this matches ComSearch
 
@@ -25,13 +25,19 @@ The counting code runs that algorithm. Appendix A says the derivation relies on 
 - `tryIndex` lists the partitions of n into g parts, which is the set-of-subexpressions construction.
 - The returned value `2*sc - sc1 + 2*sa - sa1` is the paper’s S = T − U: count the versions that allow a leading minus, then subtract the illegal all-minus forms.
 
-The expression generator is the other algorithm. ComSearch Appendix D enumerates one canonical skeleton per class. `ExpressionDynamic` builds a larger candidate pool and drops duplicates with random truncators. A matching count means the filter kept a set of the paper’s size. It does not mean each kept expression is the paper’s representative. With too few truncators the filter also drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
+The listing code is `ExpressionPowerSet` in `Python_Version/operation_counting.py`. It does the enumeration the paper’s search does: walk the choices, and hand back one expression at a time rather than only a count.
+
+- `generate_parentheses` yields one full parenthesization at a time.
+- `generate_rpn_expressions` and `generate_parenthetical_expressions` then fill in a permutation of the values and a choice of the four operators, assemble that expression, and `yield` it before building the next one.
+- A `seen` set drops an expression whose value was already yielded, so what comes out is the inequivalent list, one expression at a time. For n=2 that list is a+b, a−b, b−a, a\*b, a/b, b/a.
+
+`ExpressionDynamic`, in Java and in `web/lib/expression-dynamic.js`, is the other generator. It keeps a set and drops duplicates with random truncators instead of yielding. With too few truncators that filter drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
 
 ## Following the paper more closely
 
 1. The counters already are the A140606 algorithm Appendix A uses. `Counter.java` and `Python_Version/counter.py` cite that appendix.
-2. Enumerate Appendix D skeletons in the generator, instead of filtering. One representative per class, split the same way the counter already splits `sa` and `sc`, removes the truncator collisions and the RocksDB seen-set.
-3. Treat a generated expression as correct only when it is that representative, not only when the set size matches Equation (20).
+2. `ExpressionPowerSet` already yields the expressions one at a time. The Java and browser generators still store the whole set and filter with truncators. Point those at the same yield loop, or at the paper’s structural skip (do not build a form that commutativity, associativity, or a reversed minus would repeat).
+3. Treat a generated expression as correct when it is the one representative the enumerator yields, not only when the set size matches Equation (20).
 4. Leave the weak-supervision ranker out of this claim. ComSearch then trains math-word-problem solvers. This repository stops at the expression set and the goal search.
 
 A follow-up, once the enumeration matches Appendix D, is the paper’s false-matching problem. Several inequivalent expressions can evaluate to the same goal, and only some of them are the intended equation. The solver here already lists those hits (the 24-game examples are the small case). Ranking them, instead of returning every hit, is the next piece of the same paper. The 2024 counting paper cited below is a different extension: the same four operations plus additive inversion.
@@ -191,7 +197,7 @@ The last optimization was to implement a simple hash set using RocksDB which all
 Current goals:
 
 1. Generating the expressions for 8. Napkin math suggests that using the current method the compressed saved file would take up about 6 gb, however the database hash sets would use around 400 gb during the generation process and the actual calculation would take no less than 300 hours
-2. Replace the truncator filter with the ComSearch Appendix D enumeration, described above.
+2. The one-at-a-time enumeration is `ExpressionPowerSet` in `Python_Version/operation_counting.py`, described above. The Java path still uses the truncator filter.
 3. Continue improving the UI. Right now it looks very barebones however it still does what it needs to.
 
 
