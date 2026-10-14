@@ -6,7 +6,7 @@ Generates and allows exploration of the set of inequivalent expressions involvin
 
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
-This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The shared result is the size of the set, not their search algorithm or their math-word-problem ranker.
+This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The counters run the same counting algorithm as Appendix A. The expression generator does not run their skeleton enumeration.
 
 ## How this matches ComSearch
 
@@ -18,13 +18,20 @@ Those are the sizes this repository checks. `web/lib/counter.js` stores that pre
 
 The expressions are the same kind of object. Both sides use n distinct values, the four operations, and parentheses, and treat two expressions as the same when algebra says they are (commutativity, associativity, and rewriting such as a−(b−c) versus a−b+c).
 
-The methods are not the same. ComSearch Appendix D enumerates one canonical skeleton per class, so each inequivalent expression is produced once. This repository builds a much larger candidate pool by dynamic programming, then drops duplicates with random truncators. A matching count means the filter kept a set of the paper’s size. It does not mean each kept expression is the paper’s representative. With too few truncators the filter also drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
+The counting code runs that algorithm. Appendix A says the derivation relies on [OEIS A140606](https://oeis.org/A140606). `Counter.java` and `Python_Version/counter.py` are a port of the program linked there, [`a140606_2.pl`](https://oeis.org/A140606/a140606_2.pl.txt). It does the same decomposition as the appendix:
+
+- Two families, `sa` and `sc`, for the two choices of outermost operator (a sum of products, or a product of sums).
+- `p2m1[g] = 2^g - 1`, the paper’s factor on a set of g subexpressions.
+- `tryIndex` lists the partitions of n into g parts, which is the set-of-subexpressions construction.
+- The returned value `2*sc - sc1 + 2*sa - sa1` is the paper’s S = T − U: count the versions that allow a leading minus, then subtract the illegal all-minus forms.
+
+The expression generator is the other algorithm. ComSearch Appendix D enumerates one canonical skeleton per class. `ExpressionDynamic` builds a larger candidate pool and drops duplicates with random truncators. A matching count means the filter kept a set of the paper’s size. It does not mean each kept expression is the paper’s representative. With too few truncators the filter also drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
 
 ## Following the paper more closely
 
-1. Enumerate Appendix D skeletons instead of filtering. One representative per class, split into general addition (outer + or −) and general multiplication (outer × or ÷), removes the truncator collisions and the RocksDB seen-set.
-2. Treat a generated expression as correct only when it is that representative, not only when the set size matches Equation (20).
-3. Point the counters at Appendix A. `Counter.java` still says the proof link on the OEIS page is dead; that appendix is the derivation of this sequence.
+1. The counters already are the A140606 algorithm Appendix A uses. `Counter.java` and `Python_Version/counter.py` cite that appendix.
+2. Enumerate Appendix D skeletons in the generator, instead of filtering. One representative per class, split the same way the counter already splits `sa` and `sc`, removes the truncator collisions and the RocksDB seen-set.
+3. Treat a generated expression as correct only when it is that representative, not only when the set size matches Equation (20).
 4. Leave the weak-supervision ranker out of this claim. ComSearch then trains math-word-problem solvers. This repository stops at the expression set and the goal search.
 
 A follow-up, once the enumeration matches Appendix D, is the paper’s false-matching problem. Several inequivalent expressions can evaluate to the same goal, and only some of them are the intended equation. The solver here already lists those hits (the 24-game examples are the small case). Ranking them, instead of returning every hit, is the next piece of the same paper. The 2024 counting paper cited below is a different extension: the same four operations plus additive inversion.

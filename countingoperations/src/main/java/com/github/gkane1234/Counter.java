@@ -1,10 +1,12 @@
 package com.github.gkane1234;
 import java.math.BigInteger;
 import java.util.Arrays;
-/** 
-    This is a Java implementation of the counting algorithm found here: https://oeis.org/A140606
-    Used to count the number of inequivalent expressions that can be made with n values and the standard 4 operations.
-    There is apparently a mathematical proof that describes the algorithm, but I have not yet been able to find it, as the link on the OEIS page is dead.
+/**
+    Counts inequivalent expressions on n variables with the four arithmetic operations.
+    This is the OEIS A140606 algorithm (https://oeis.org/A140606/a140606_2.pl.txt).
+    ComSearch Appendix A (https://arxiv.org/pdf/2210.07017) uses that sequence:
+    two outermost-operator families, a factor of 2^g-1 on each set of g subexpressions,
+    and S = T - U, which is 2*sc - sc1 + 2*sa - sa1 here.
 */
 public class Counter {
     
