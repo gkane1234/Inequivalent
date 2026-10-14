@@ -1,10 +1,10 @@
 '''
-
-Found online and converted to python
-
+Python port of the OEIS A140606 counting program:
 https://oeis.org/A140606/a140606_2.pl.txt
 
-
+This is the same algorithm ComSearch Appendix A relies on
+(https://arxiv.org/pdf/2210.07017): two outermost-operator families,
+a factor of 2^g-1, and S = T - U via 2*sc - sc1 + 2*sa - sa1.
 '''
 
 

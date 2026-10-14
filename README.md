@@ -6,6 +6,39 @@ Generates and allows exploration of the set of inequivalent expressions involvin
 
 $$\frac{(2222222-2)(222222-2222)}{22222-222}+22 = 22222222$$
 
+This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The counters run the counting recurrence Appendix A uses. The Python listing code does not run ComSearch’s search. That search is `ComSearchGenerator` in the Java sources.
+
+## How this matches ComSearch
+
+Appendix A of that paper builds the exponential generating function for inequivalent expressions on n labeled variables using only addition, subtraction, multiplication, and division. No unary minus. Equation (20) is
+
+1, 6, 68, 1170, 27142, 793002, 27914126, …
+
+Those are the sizes this repository checks. `web/lib/counter.js` stores that prefix through n=7. The Java and Python `Counter` programs compute the same numbers from the [OEIS A140606](https://oeis.org/A140606) recurrence. Generation is accepted when the set for n has that many expressions: the browser check prints them for n≤6, and `Counter` reports 27,914,126 for n=7, the seventh term. `ComSearchSolverTest` checks that `ComSearchGenerator` yields `Counter.run(n)` expressions through n=4.
+
+The expressions are the same kind of object. Both sides use n distinct values, the four operations, and parentheses, and treat two expressions as the same when algebra says they are (commutativity, associativity, and rewriting such as a−(b−c) versus a−b+c).
+
+The counting code runs that algorithm. Appendix A says the derivation relies on [OEIS A140606](https://oeis.org/A140606). `Counter.java` and `Python_Version/counter.py` are a port of the program linked there, [`a140606_2.pl`](https://oeis.org/A140606/a140606_2.pl.txt). It does the same decomposition as the appendix:
+
+- Two families, `sa` and `sc`, for the two choices of outermost operator (a sum of products, or a product of sums).
+- `p2m1[g] = 2^g - 1`, the paper’s factor on a set of g subexpressions.
+- `tryIndex` lists the partitions of n into g parts, which is the set-of-subexpressions construction.
+- The returned value `2*sc - sc1 + 2*sa - sa1` is the paper’s S = T − U: count the versions that allow a leading minus, then subtract the illegal all-minus forms.
+
+`ExpressionPowerSet` in `Python_Version/operation_counting.py` does yield expressions one at a time, and for n=2 those are a+b, a−b, b−a, a\*b, a/b, b/a. That is not the ComSearch search. ComSearch’s `enum` walks a list of subtrees depth-first and `smart4` refuses to build a duplicate, using commutativity, associativity, and a reversed minus, without evaluating the expression. `generate_rpn_expressions` and `generate_parenthetical_expressions` instead take the product of value permutations, operator choices, and parenthesizations, build each one, and drop it if a `seen` set already holds that numeric value.
+
+The Java port of that search is `ComSearchGenerator`. `generate` hands each expression to a consumer as it is built. Additive groups use a 2^{g−1} mask and multiplicative groups use 2^g−1, and any expression that contains subtraction is also emitted in its algebraic opposite. `UnorderedPartition` supplies the set splits. `Solver` searches with that generator and builds an `Expression` only when a value hits the goal. `ComSearchExplorer` is the Swing UI, and `CountingMain` launches it.
+
+`ExpressionDynamic` in `web/lib/expression-dynamic.js` is the other generator still used by the browser. It keeps a set and drops duplicates with random truncators instead of yielding. With too few truncators that filter drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
+
+## Following the paper more closely
+
+1. The counters already are the A140606 algorithm Appendix A uses. `Counter.java` and `Python_Version/counter.py` cite that appendix.
+2. The Java search already uses ComSearch’s structural skip. `ComSearchGenerator` refuses the duplicate while it builds, the same idea as `enum` / `smart4`. `ExpressionPowerSet` in Python still builds every candidate and drops it after evaluation.
+3. Treat a generated expression as correct when it is the one representative the enumerator yields, not only when the set size matches Equation (20).
+4. Leave the weak-supervision ranker out of this claim. ComSearch then trains math-word-problem solvers. This repository stops at the expression set and the goal search.
+
+A follow-up, once the enumeration matches Appendix D, is the paper’s false-matching problem. Several inequivalent expressions can evaluate to the same goal, and only some of them are the intended equation. The solver here already lists those hits (the 24-game examples are the small case). Ranking them, instead of returning every hit, is the next piece of the same paper. The 2024 counting paper cited below is a different extension: the same four operations plus additive inversion.
 
 ## Browser demo
 
@@ -19,30 +52,35 @@ npx serve web -p 5173
 
 ## Features
 
-- Feature 1: Generation is done through a novel dynamic programming and stochastic approach, and is agnostic to operations used.
-- Feature 2: Can be generated using low RAM usage even in generating 10s of millions of expressions
-- Feature 3: Storing and reading the expressions is done using a custom compression algorithm.
+- Feature 1: The Java enumerator is `ComSearchGenerator`, the structural search from ComSearch. It yields inequivalent expressions one at a time.
+- Feature 2: `Solver` evaluates while combining and builds an `Expression` only for a hit, so a large search does not store the full set.
+- Feature 3: The browser app still generates expression sets through n=6 and caches them.
 - Feature 4: Implements a known algorithm for finding the number of inequivalent expressions in Java and Python.
 
 ## Installation
 
 ### Prerequisites
-- Package Trove for the faster, more ram intensive approach for generation
-- Package RocksDB for the slower but less ram intensive apporach
+- Java and Maven. The ComSearch Java path does not use Trove or RocksDB.
 
 ### Steps
 1. Clone the repository:
    ```bash
-   git clone https://github.com/gkane1234/counting_operations.git
-2. Interpret countingoperations as a java project.
-3. Install and use dependencies for Trove and RocksDB with Maven or something similar.
+   git clone https://github.com/gkane1234/inequivalent.git
+   ```
+2. Run the tests:
+   ```bash
+   mvn -f countingoperations/pom.xml test
+   ```
+3. Launch the explorer:
+   ```bash
+   mvn -f countingoperations/pom.xml exec:java
+   ```
 
 
 
 ## Usage
 
-Using the Applet is straightforward -- you can choose how many numbers to be in the expressions and a goal value to find. 
-Then you can either explicitly choose the numbers to appear in the expression, or choose parameters for them and have them be generated randomly.
+`ComSearchExplorer` is the Java UI. Choose how many numbers are in the expression and a goal value. Type the numbers, or set a range and randomize them. Start streams matches as they are found. Stop keeps the output already printed.
 
 
 ## Development
@@ -162,7 +200,7 @@ The last optimization was to implement a simple hash set using RocksDB which all
 Current goals:
 
 1. Generating the expressions for 8. Napkin math suggests that using the current method the compressed saved file would take up about 6 gb, however the database hash sets would use around 400 gb during the generation process and the actual calculation would take no less than 300 hours
-2. Implementing the enumeration approach. There is a paper that details generating this list of inequivalent expressions directly using a combinatorial approach. This seems like a nicer way to approach the problem, however I have been unable to figure out how to do this works.
+2. Replace the value filter in `ExpressionPowerSet` with the same structural skip `ComSearchGenerator` uses.
 3. Continue improving the UI. Right now it looks very barebones however it still does what it needs to.
 
 
@@ -171,7 +209,7 @@ Current goals:
 Other work in the area:
 [The OEIS page that has the values as well as the C code for generating the number of expressions](https://oeis.org/A140606)
 
-[A paper that details a method of enumerating inequivalent expressions without the need of a filter, used for a task in NLP](https://arxiv.org/pdf/2210.07017)
+[ComSearch](https://arxiv.org/pdf/2210.07017) enumerates inequivalent expressions without a stochastic filter, for a math-word-problem task. `ComSearchGenerator` is that search in the Java sources. The counts in its Appendix A are the result recreated here.
 
 [A paper that details a counting algorithm for inequivalent expressions over the 4 standard operations with additive inversion](https://arxiv.org/pdf/2405.13928)
 
