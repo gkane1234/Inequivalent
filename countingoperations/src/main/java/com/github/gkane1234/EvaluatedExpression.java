@@ -26,26 +26,13 @@ public class EvaluatedExpression extends Expression{
         @return a <code>String</code> representing the EvaluatedExpression.
     */
     public String display() {
-        ArrayStack<String> stack = new ArrayStack<>(this.order.length);
-        byte values_pointer =0;
-        byte operations_pointer = 0;
-        for (boolean isNumber : this.order) {
-            if (isNumber) {
-                double next = this.values[this.valueOrder[values_pointer++]];
-                if (next == Math.round(next)) {
-                    stack.push(String.valueOf(Math.round(next)));
-                } else {
-                    stack.push(String.format("%." + DECIMAL_PLACES + "f", next));;
-                }
-            } else {
-                byte opCode = this.operations[operations_pointer++];
-                String b = stack.pop();
-                String a = stack.pop();
-                String combinedExpression = "("+a+String.valueOf(Operation.getOperations()[opCode])+b+")";
-                stack.push(combinedExpression);
-            }   
-        }
-        return stack.peek();
+        return Expression.formatInfix(this, i -> {
+            double next = this.values[this.valueOrder[i] & 0xff];
+            if (next == Math.round(next)) {
+                return String.valueOf(Math.round(next));
+            }
+            return String.format("%." + DECIMAL_PLACES + "f", next);
+        });
     }
     /**
         Returns the values used in the expression.

@@ -63,17 +63,23 @@ public class Expression implements Serializable{
         @param values: the values of the expression.
         @param rounding: the number of decimal places to round the result to.
     */
-    public double evaluateWithValues(double[] values,int rounding) {
-        double[] newValues = new double[values.length];
-        for (byte i=0;i<valueOrder.length;i++) {
-            newValues[i]=values[this.valueOrder[i]];
+    public double evaluateWithValues(double[] values, int rounding) {
+        return evaluateWithValues(values, rounding, null, null);
+    }
+
+    /**
+     * Evaluate without allocating remap/stack when scratch buffers are provided.
+     * {@code remapScratch} length &gt;= valueOrder.length; {@code stackScratch} length &gt;= order.length.
+     */
+    public double evaluateWithValues(double[] values, int rounding,
+                                     double[] remapScratch, double[] stackScratch) {
+        double[] remapped = remapScratch != null && remapScratch.length >= valueOrder.length
+                ? remapScratch
+                : new double[valueOrder.length];
+        for (int i = 0; i < valueOrder.length; i++) {
+            remapped[i] = values[valueOrder[i] & 0xff];
         }
-        double val = this.evaluateRpn(newValues,rounding);
-
-        return val;
-
-
-        
+        return evaluateRpn(remapped, rounding, stackScratch);
     }
 
     @Override
@@ -87,67 +93,120 @@ public class Expression implements Serializable{
     @param values: the values of the expression.
     @param rounding: the number of decimal places to round the result to.
     */
-    private double evaluateRpn(double[] values,int rounding) {
-        
-        DoubleArrayStack stack = new DoubleArrayStack(this.order.length);
-        byte values_pointer =0;
-        byte operations_pointer = 0;
+    private double evaluateRpn(double[] values, int rounding, double[] stackScratch) {
+        double[] stack = stackScratch != null && stackScratch.length >= order.length
+                ? stackScratch
+                : new double[order.length];
+        int sp = 0;
+        int valuesPointer = 0;
+        int operationsPointer = 0;
+        Operation[] ops = Operation.getOperations();
 
-        for (boolean isNumber : this.order) {
-            if (isNumber){
-                stack.push(values[values_pointer++] );
+        for (boolean isNumber : order) {
+            if (isNumber) {
+                stack[sp++] = values[valuesPointer++];
             } else {
-                if (stack.size() < 2) {
+                if (sp < 2) {
                     throw new IllegalStateException("Invalid expression: " + this.toString());
                 }
-                double b = stack.pop();
-                double a = stack.pop();
-                
-                double result= Operation.getOperations()[operations[operations_pointer++]].apply(a, b);
+                double b = stack[--sp];
+                double a = stack[--sp];
+                double result = ops[operations[operationsPointer++]].apply(a, b);
                 if (Double.isNaN(result)) {
                     return result;
                 }
-                stack.push(result);
+                stack[sp++] = result;
             }
         }
-        double nonRounded = stack.pop();
-        //return nonRounded;
-        return Math.round(nonRounded * Math.pow(10, rounding)) / Math.pow(10,rounding);
+        double nonRounded = stack[--sp];
+        double factor = Math.pow(10, rounding);
+        return Math.round(nonRounded * factor) / factor;
     }
 
     public boolean equals(Expression expression) {
         return Arrays.equals(this.valueOrder, expression.valueOrder) && Arrays.equals(this.operations, expression.operations) && Arrays.equals(this.order, expression.order);
     }
     /**
-        Converts the expression to a parenthetical string.
-        @param expression: the expression to convert.
-    */
+     * Pretty-print with only the parentheses required by operator precedence
+     * (so {@code (a+b)*c} stays parenthesized, but {@code (a+b)+c} becomes {@code a+b+c}).
+     */
     public static String convertToParenthetical(Expression expression) {
-        
-        Stack<String> stack = new Stack<>();
-        byte values_pointer =0;
-        byte operations_pointer = 0;
+        return formatInfix(expression, i -> String.valueOf(expression.valueOrder[i] & 0xff));
+    }
 
-        
+    /**
+     * Same precedence rules as {@link #convertToParenthetical}, but leaf text comes
+     * from {@code leafText} (e.g. concrete values for {@link EvaluatedExpression#display()}).
+     */
+    public static String formatInfix(Expression expression,
+                                    java.util.function.IntFunction<String> leafText) {
+        ArrayStack<InfixFrag> stack = new ArrayStack<>(expression.order.length);
+        int valuesPointer = 0;
+        int operationsPointer = 0;
         for (boolean isNumber : expression.order) {
             if (isNumber) {
-                if (values_pointer>=expression.valueOrder.length) {
-                    throw new IllegalStateException("Invalid expression: " + Arrays.toString(expression.order));
+                if (valuesPointer >= expression.valueOrder.length) {
+                    throw new IllegalStateException(
+                            "Invalid expression: " + Arrays.toString(expression.order));
                 }
-                stack.push(String.valueOf(expression.valueOrder[values_pointer++]));
+                stack.push(InfixFrag.leaf(leafText.apply(valuesPointer++)));
             } else {
-                if (operations_pointer>=expression.operations.length) {
-                    throw new IllegalStateException("Invalid expression: " + Arrays.toString(expression.order));
+                if (operationsPointer >= expression.operations.length) {
+                    throw new IllegalStateException(
+                            "Invalid expression: " + Arrays.toString(expression.order));
                 }
-                byte opCode = expression.operations[operations_pointer++];
-                String b = stack.pop();
-                String a = stack.pop();
-                String combinedExpression = "("+a+String.valueOf(Operation.getOperations()[opCode])+b+")";
-                stack.push(combinedExpression);
-            
-            }   
+                byte op = expression.operations[operationsPointer++];
+                InfixFrag b = stack.pop();
+                InfixFrag a = stack.pop();
+                stack.push(InfixFrag.combine(a, b, op));
+            }
         }
-        return stack.pop();
+        return stack.pop().text;
+    }
+
+    private static final class InfixFrag {
+        final String text;
+        /** 0 = atom, 1 = +/-, 2 = * or /. */
+        final int precedence;
+
+        private InfixFrag(String text, int precedence) {
+            this.text = text;
+            this.precedence = precedence;
+        }
+
+        static InfixFrag leaf(String text) {
+            return new InfixFrag(text, 0);
+        }
+
+        static InfixFrag combine(InfixFrag left, InfixFrag right, byte op) {
+            int prec = precedenceOf(op);
+            char symbol = Operation.getOperations()[op].getName();
+            String a = needsParens(left, prec, true) ? "(" + left.text + ")" : left.text;
+            String b = needsParens(right, prec, false) ? "(" + right.text + ")" : right.text;
+            return new InfixFrag(a + symbol + b, prec);
+        }
+
+        private static int precedenceOf(byte op) {
+            // + - lower than * /
+            return (op == 0 || op == 1) ? 1 : 2;
+        }
+
+        /**
+         * Left-associative ops: left child at same precedence needs no parens;
+         * right child at same (or lower) precedence does, so {@code a-(b-c)} stays clear.
+         */
+        private static boolean needsParens(InfixFrag child, int parentPrec, boolean isLeft) {
+            if (child.precedence == 0) {
+                return false;
+            }
+            if (child.precedence < parentPrec) {
+                return true;
+            }
+            if (child.precedence > parentPrec) {
+                return false;
+            }
+            return !isLeft;
+        }
     }
 
     /**
@@ -189,15 +248,20 @@ public class Expression implements Serializable{
      */
 
     private static Expression combineExpressions(Expression expr1, Expression expr2, byte opCode) {
-        
-        byte[] newValueOrder = combine(expr1.valueOrder,expr2.valueOrder);
-        byte[] newOperations = combineWithExtraSpot(expr1.operations,expr2.operations);
-        newOperations[newOperations.length-1]=opCode;
-        boolean[] newOrder =combineWithExtraSpot(expr1.order,expr2.order);
-        newOrder[newOrder.length-1]=false;
+        return combineWithOp(expr1, expr2, opCode);
+    }
 
+    /**
+     * Combines two expressions with a single binary operation (RPN append).
+     * Op codes: 0 +, 1 -, 2 *, 3 /.
+     */
+    public static Expression combineWithOp(Expression expr1, Expression expr2, byte opCode) {
+        byte[] newValueOrder = combine(expr1.valueOrder, expr2.valueOrder);
+        byte[] newOperations = combineWithExtraSpot(expr1.operations, expr2.operations);
+        newOperations[newOperations.length - 1] = opCode;
+        boolean[] newOrder = combineWithExtraSpot(expr1.order, expr2.order);
+        newOrder[newOrder.length - 1] = false;
         return new Expression(newValueOrder, newOperations, newOrder);
-
     }
     /**
         Combines two byte arrays.
