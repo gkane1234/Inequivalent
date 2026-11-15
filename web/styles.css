@@ -122,6 +122,12 @@ header.hero p {
   margin-top: 0.75rem;
 }
 
+.hint {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .pill {
   font-family: var(--mono);
   font-size: 0.75rem;

@@ -84,16 +84,68 @@ export async function saveList(expressionList) {
   });
 }
 
-export async function loadList(n) {
+export async function loadRecord(n) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
     const req = tx.objectStore(STORE).get(n);
     req.onsuccess = () => {
       db.close();
-      resolve(req.result ? unpackList(req.result) : null);
+      resolve(req.result || null);
     };
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
+  });
+}
+
+export async function loadList(n) {
+  const record = await loadRecord(n);
+  return record ? unpackList(record) : null;
+}
+
+/** Unpack one cached level, returning to onPause periodically so other work can run. */
+export async function unpackListAsync(record, onPause) {
+  if (!onPause) return unpackList(record);
+
+  const n = record.n;
+  const count = record.count;
+  const orderLen = 2 * n - 1;
+  const opsLen = Math.max(n - 1, 0);
+  const valueOrders = new Uint8Array(record.valueOrders);
+  const operations = new Uint8Array(record.operations);
+  const orders = new Uint8Array(record.orders);
+
+  const expressions = new Array(count);
+  let lastYield = Date.now();
+  for (let i = 0; i < count; i++) {
+    const vo = Array.from(valueOrders.subarray(i * n, i * n + n));
+    const ops = opsLen ? Array.from(operations.subarray(i * opsLen, i * opsLen + opsLen)) : [];
+    const ord = Array.from(orders.subarray(i * orderLen, i * orderLen + orderLen), (x) => x === 1);
+    expressions[i] = new Expression(vo, ops, ord);
+    if ((i & 1023) === 1023 && Date.now() - lastYield >= 40) {
+      lastYield = Date.now();
+      const pause = onPause();
+      if (pause && typeof pause.then === "function") await pause;
+    }
+  }
+  return new PlainExpressionList(expressions, n);
+}
+
+export async function listCachedNs() {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAllKeys();
+    req.onsuccess = () => {
+      db.close();
+      resolve(req.result);
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
   });
 }
 
@@ -111,9 +163,9 @@ export async function clearCache() {
 }
 
 export async function hasFullCache(maxN) {
+  const keys = new Set(await listCachedNs());
   for (let n = 1; n <= maxN; n++) {
-    const list = await loadList(n);
-    if (!list) return false;
+    if (!keys.has(n)) return false;
   }
   return true;
 }

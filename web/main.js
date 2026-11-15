@@ -158,7 +158,12 @@ worker.onmessage = (event) => {
 };
 
 worker.onerror = (err) => {
-  els.statusLine.textContent = `Worker error: ${err.message}`;
+  const message = err.message || "The solver stopped unexpectedly";
+  els.statusLine.textContent = `Worker error: ${message}`;
+  for (const [, entry] of pending) {
+    entry.reject(new Error(message));
+  }
+  pending.clear();
   console.error(err);
 };
 

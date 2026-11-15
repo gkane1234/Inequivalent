@@ -4,10 +4,6 @@ import { generateThroughN } from "./lib/expression-dynamic.js";
 const TOLERANCE = 1e-5;
 const ROUNDING = 9;
 
-/** Build the inequivalent set for n=3 once (68 expressions). */
-const LIST_N3 = generateThroughN({ targetN: 3 }).at(-1);
-const TOTAL = LIST_N3.numExpressions;
-
 function valuesEqual(x, y) {
   return Math.abs(x - y) <= TOLERANCE;
 }
@@ -30,7 +26,7 @@ function formatDelta(delta) {
 /**
  * Wire the n=3 interactive demo: list expressions ordered by closeness to the goal.
  */
-export function initExplainDemo() {
+export async function initExplainDemo() {
   const inputA = document.getElementById("demoA");
   const inputB = document.getElementById("demoB");
   const inputC = document.getElementById("demoC");
@@ -39,6 +35,10 @@ export function initExplainDemo() {
   const meta = document.getElementById("demoMeta");
 
   if (!inputA || !inputB || !inputC || !inputGoal || !list || !meta) return;
+
+  /** Inequivalent set for n=3 (68 expressions), built on the page for the demo. */
+  const LIST_N3 = (await generateThroughN({ targetN: 3 })).at(-1);
+  const TOTAL = LIST_N3.numExpressions;
 
   function render() {
     const a = Number(inputA.value);
