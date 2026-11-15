@@ -10,7 +10,7 @@ const maxN = Number(process.argv[2] || 4);
 
 console.log(`Generating through n=${maxN}…`);
 const start = Date.now();
-const lists = generateThroughN({
+const lists = await generateThroughN({
   targetN: maxN,
   rounding: 9,
   numTruncators: 20,

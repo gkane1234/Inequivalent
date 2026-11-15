@@ -9,22 +9,46 @@ import { expectedCount } from "./counter.js";
  * @param {number} [options.rounding=9]
  * @param {number} [options.numTruncators=20]
  * @param {(msg: object) => void} [options.onProgress]
- * @param {(n: number, list: import('./expression-set.js').ExpressionSet) => void} [options.onLevelComplete]
+ * @param {(n: number, list: import('./expression-set.js').ExpressionSet) => void|Promise<void>} [options.onLevelComplete]
+ * @param {() => void|Promise<void>} [options.onPause]
+ *   Called between levels and during a level so a caller can run other work
+ *   (for example solving an n that is already built) without waiting for targetN.
+ * @param {number} [options.yieldEveryMs=40]
+ *   Minimum gap between inner onPause calls. 0 pauses on the inner cadence immediately.
  */
-export function generateThroughN({
+export async function generateThroughN({
   targetN,
   rounding = 9,
   numTruncators = 20,
   onProgress = () => {},
   onLevelComplete = () => {},
+  onPause = null,
+  yieldEveryMs = 40,
 }) {
   const lists = [];
+  let steps = 0;
+  let lastYield = 0;
+
+  // Only await real promises. Awaiting every call would turn the hot loop into microtasks.
+  async function settle(value) {
+    if (value && typeof value.then === "function") await value;
+  }
+
+  function pauseIfDue() {
+    if (!onPause) return null;
+    steps++;
+    if ((steps & 31) !== 0) return null;
+    const now = Date.now();
+    if (yieldEveryMs > 0 && now - lastYield < yieldEveryMs) return null;
+    lastYield = now;
+    return onPause();
+  }
 
   const first = new ExpressionSet(1, rounding, numTruncators);
   first.forceAdd(new Expression([0], [], [true]));
   first.cleanup();
   lists.push(first);
-  onLevelComplete(1, first);
+  const firstReady = onLevelComplete(1, first);
 
   onProgress({
     type: "level",
@@ -34,6 +58,7 @@ export function generateThroughN({
     fraction: 1 / targetN,
     message: "Ready: 1 value (1 expression)",
   });
+  await settle(firstReady);
 
   for (let currentNumValues = 2; currentNumValues <= targetN; currentNumValues++) {
     onProgress({
@@ -42,6 +67,11 @@ export function generateThroughN({
       fraction: (currentNumValues - 1) / targetN,
       message: `Generating expressions for ${currentNumValues} values…`,
     });
+
+    if (onPause) {
+      lastYield = Date.now();
+      await settle(onPause());
+    }
 
     const current = new ExpressionSet(currentNumValues, rounding, numTruncators);
     let start = currentNumValues - 1;
@@ -60,6 +90,7 @@ export function generateThroughN({
         fraction: (currentNumValues - 1) / targetN,
         message: `n=${currentNumValues}: combining group size ${i}…`,
       });
+      if (onPause) await settle(onPause());
 
       const leftList = lists[i - 1];
       const rightList = lists[currentNumValues - i - 1];
@@ -95,6 +126,8 @@ export function generateThroughN({
                 }
               }
             }
+            const pause = pauseIfDue();
+            if (pause && typeof pause.then === "function") await pause;
           }
         }
       }
@@ -102,7 +135,7 @@ export function generateThroughN({
 
     current.cleanup();
     lists.push(current);
-    onLevelComplete(currentNumValues, current);
+    const levelReady = onLevelComplete(currentNumValues, current);
 
     onProgress({
       type: "level",
@@ -112,6 +145,7 @@ export function generateThroughN({
       fraction: currentNumValues / targetN,
       message: `Done n=${currentNumValues}: ${current.numExpressions.toLocaleString()} expressions (expected ${expectedCount(currentNumValues).toLocaleString()})`,
     });
+    await settle(levelReady);
   }
 
   return lists;
