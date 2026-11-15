@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ComSearch Solver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./comsearch.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <h1>ComSearch Solver</h1>
+        <p>
+          Walks inequivalent expressions with the ComSearch search and checks them against your
+          goal. Nothing is stored ahead of time. The search stops when it reaches the max solution
+          count.
+        </p>
+        <p class="page-link"><a href="./index.html">Expression-list solver</a></p>
+      </header>
+
+      <section class="panel" aria-labelledby="search-heading">
+        <h2 id="search-heading">Checked</h2>
+        <div class="search-progress">
+          <div
+            class="search-track"
+            id="searchTrack"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuenow="0"
+            aria-valuemax="1"
+            aria-label="Expressions checked"
+          >
+            <span id="searchFill"></span>
+          </div>
+          <div class="search-count" id="searchCount">0 checked</div>
+        </div>
+        <div class="search-label" id="searchLabel">Ready.</div>
+      </section>
+
+      <section class="panel" aria-labelledby="solver-heading">
+        <h2 id="solver-heading">Solver</h2>
+
+        <div class="modes" role="tablist">
+          <button type="button" class="active" id="modeSpecific" data-mode="specific">
+            Specific Values
+          </button>
+          <button type="button" id="modeFind" data-mode="find">Find Values</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="field">
+            <span class="field-label">Number of values</span>
+            <div class="n-buttons" id="nButtons" role="group" aria-label="Number of values"></div>
+          </div>
+          <label class="field">
+            Goal
+            <input id="goal" type="text" inputmode="decimal" value="24" autocomplete="off" />
+          </label>
+          <label class="field">
+            Max solutions
+            <input id="maxSolutionsCap" type="text" inputmode="numeric" value="50" autocomplete="off" />
+          </label>
+        </div>
+
+        <div id="specificPanel">
+          <div class="grid-values" id="valueFields"></div>
+        </div>
+
+        <div id="findPanel" class="hidden">
+          <div class="row-2">
+            <label class="field">
+              Min value
+              <input id="minValue" type="text" inputmode="numeric" value="1" autocomplete="off" />
+            </label>
+            <label class="field">
+              Max value (exclusive)
+              <input id="maxValue" type="text" inputmode="numeric" value="15" autocomplete="off" />
+            </label>
+            <label class="field">
+              Min solutions (board)
+              <input id="minSolutions" type="text" inputmode="numeric" value="1" autocomplete="off" />
+            </label>
+            <label class="field">
+              Max solutions (board)
+              <input id="maxSolutions" type="text" inputmode="numeric" value="50" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="primary" id="runBtn">Solve</button>
+          <button type="button" class="ghost" id="randomBtn">Random example</button>
+        </div>
+        <div class="meta" id="solveMeta"></div>
+        <div class="results" id="results" aria-live="polite"></div>
+      </section>
+    </div>
+    <script type="module" src="./comsearch-main.js"></script>
+  </body>
+</html>

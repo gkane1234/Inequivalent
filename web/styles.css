@@ -333,6 +333,14 @@ footer.note {
   color: var(--muted);
 }
 
+.page-link {
+  margin: 0.75rem 0 0;
+}
+
+.page-link a {
+  color: var(--accent);
+}
+
 .row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
