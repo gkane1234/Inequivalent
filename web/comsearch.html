@@ -27,36 +27,9 @@
             >comsearch</a
           >
           algorithm and checks them against your goal. Nothing is stored ahead of time. The search
-          stops at the max solution count, or when you press Stop. Leave Dedupe repeated numbers
-          off to keep each hit in the index order the search already uses. Turn it on and each hit
-          reorders its sums and products by the text of those parts, then a set keeps one copy of
-          each line. The expressions that get checked do not change.
+          stops at the max solution count, or when you press Stop.
         </p>
       </header>
-
-      <section class="panel" aria-labelledby="notes-heading">
-        <h2 id="notes-heading">ComSearch</h2>
-        <div class="explain-body" id="comsearch-notes">Loading the ComSearch notes…</div>
-      </section>
-
-      <section class="panel" aria-labelledby="search-heading">
-        <h2 id="search-heading">Checked</h2>
-        <div class="search-progress">
-          <div
-            class="search-track"
-            id="searchTrack"
-            role="progressbar"
-            aria-valuemin="0"
-            aria-valuenow="0"
-            aria-valuemax="1"
-            aria-label="Expressions checked"
-          >
-            <span id="searchFill"></span>
-          </div>
-          <div class="search-count" id="searchCount">0 checked</div>
-        </div>
-        <div class="search-label" id="searchLabel">Ready.</div>
-      </section>
 
       <section class="panel" aria-labelledby="solver-heading">
         <h2 id="solver-heading">Solver</h2>
@@ -120,8 +93,33 @@
           <button type="button" class="ghost stop" id="stopBtn" disabled>Stop</button>
           <button type="button" class="ghost" id="randomBtn">Random example</button>
         </div>
+
+        <div class="checked-below">
+          <h2 id="search-heading">Checked</h2>
+          <div class="search-progress">
+            <div
+              class="search-track"
+              id="searchTrack"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuenow="0"
+              aria-valuemax="1"
+              aria-label="Expressions checked"
+            >
+              <span id="searchFill"></span>
+            </div>
+            <div class="search-count" id="searchCount">0 checked</div>
+          </div>
+          <div class="search-label" id="searchLabel">Ready.</div>
+        </div>
+
         <div class="meta" id="solveMeta"></div>
         <div class="results" id="results" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="notes-heading">
+        <h2 id="notes-heading">ComSearch</h2>
+        <div class="explain-body" id="comsearch-notes">Loading the ComSearch notes…</div>
       </section>
     </div>
     <script type="module" src="./comsearch-main.js"></script>
