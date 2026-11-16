@@ -19,6 +19,14 @@ The counting code runs that algorithm. Appendix A says the derivation relies on 
 
 `ExpressionPowerSet` in `Python_Version/operation_counting.py` does yield expressions one at a time, and for n=2 those are a+b, a−b, b−a, a\*b, a/b, b/a. That is not the ComSearch search. ComSearch’s `enum` walks a list of subtrees depth-first and `smart4` refuses to build a duplicate, using commutativity, associativity, and a reversed minus, without evaluating the expression. `generate_rpn_expressions` and `generate_parenthetical_expressions` instead take the product of value permutations, operator choices, and parenthesizations, build each one, and drop it if a `seen` set already holds that numeric value.
 
+## How a search runs
+
+The solver walks those inequivalent expressions and checks each one against the goal. Nothing is stored ahead of time. It stops at the max solution count, or when you press Stop.
+
+Leave **Dedupe repeated numbers** off to keep each hit in the index order the search already uses. The same line can show up more than once when an input number is repeated, because the leaves stay distinct.
+
+Turn the option on and, for a hit only, each sum or product is flattened and its parts are ordered by their text. A set then keeps one copy of that line. Subtraction and division stay in operand order. The expressions that get checked do not change, and a miss still allocates nothing. The max solution count applies to those unique lines.
+
 The Java port of that search is `ComSearchGenerator`. `generate` hands each expression to a consumer as it is built. Additive groups use a 2^{g−1} mask and multiplicative groups use 2^g−1, and any expression that contains subtraction is also emitted in its algebraic opposite. `UnorderedPartition` supplies the set splits. `Solver` searches with that generator and builds an `Expression` only when a value hits the goal. `ComSearchExplorer` is the Swing UI, and `CountingMain` launches it.
 
 `ExpressionDynamic` in `web/lib/expression-dynamic.js` is the other generator still used by the browser. It keeps a set and drops duplicates with random truncators instead of yielding. With too few truncators that filter drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.

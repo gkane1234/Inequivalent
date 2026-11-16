@@ -9,7 +9,7 @@ self.onmessage = (event) => {
   const { id, action, payload } = event.data;
   try {
     if (action === "solve") {
-      const { numValues, values, goal, maxSolutions = 50 } = payload;
+      const { numValues, values, goal, maxSolutions = 50, dedupeRepeated = false } = payload;
       if (!Array.isArray(values) || values.length !== numValues) {
         throw new Error(`expected ${numValues} values`);
       }
@@ -29,7 +29,9 @@ self.onmessage = (event) => {
         },
         (solution) => {
           post({ type: "solution", id, expression: solution.expression, value: solution.value });
-        }
+        },
+        undefined,
+        { dedupeRepeated }
       );
       post({ type: "result", id, ok: true, ...result, values, goal });
       return;
@@ -43,6 +45,7 @@ self.onmessage = (event) => {
         solutionRange,
         maxAttempts = 1000,
         displayCap = 50,
+        dedupeRepeated = false,
       } = payload;
       const [vmin, vmax] = valueRange;
       const [smin, smax] = solutionRange;
@@ -72,7 +75,9 @@ self.onmessage = (event) => {
           },
           (solution) => {
             post({ type: "solution", id, expression: solution.expression, value: solution.value });
-          }
+          },
+          undefined,
+          { dedupeRepeated }
         );
         if (result.solutions.length >= smin && result.solutions.length <= smax) {
           post({

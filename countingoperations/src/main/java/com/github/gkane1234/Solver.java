@@ -1,5 +1,6 @@
 package com.github.gkane1234;
 
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -88,16 +89,32 @@ public class Solver {
      * Enumerate ComSearch expressions in order, invoke {@code onFound} for each match
      * as soon as it is discovered. Stops early if {@code maxSolutions} is reached or
      * {@link #requestStop()} is called — remaining expressions are simply not visited.
+     * Keeps the search's index order and reports every labeled hit.
      */
     public SearchStats findSolutionsStreaming(double[] values, double goal, int maxSolutions,
                                               Consumer<EvaluatedExpression> onFound,
                                               Consumer<SearchStats> onProgress) {
+        return findSolutionsStreaming(values, goal, maxSolutions, onFound, onProgress, false);
+    }
+
+    /**
+     * Same walk as {@link #findSolutionsStreaming(double[], double, int, Consumer, Consumer)}.
+     * When {@code dedupeRepeated} is set, each hit reorders its sums and products by the
+     * text of those parts and only the first copy of that line counts toward
+     * {@code maxSolutions}. Otherwise the index order and every labeled hit are kept.
+     * {@code checked} is the full walk either way.
+     */
+    public SearchStats findSolutionsStreaming(double[] values, double goal, int maxSolutions,
+                                              Consumer<EvaluatedExpression> onFound,
+                                              Consumer<SearchStats> onProgress,
+                                              boolean dedupeRepeated) {
         if (values.length != numValues) {
             throw new IllegalArgumentException(
                     "expected " + numValues + " values, got " + values.length);
         }
         AtomicLong found = new AtomicLong();
         AtomicLong checked = new AtomicLong();
+        final HashSet<String> seen = dedupeRepeated ? new HashSet<String>() : null;
         final double roundFactor = Math.pow(10, ROUNDING);
         // Progress less often for large n so UI/callback overhead stays small.
         final long progressEvery = numValues >= 9 ? 100_000L : 2_000L;
@@ -112,10 +129,16 @@ public class Solver {
             if (equal(value, goal)) {
                 // Materialize synchronously while generator scratch state is valid.
                 Expression expression = materialize.get();
+                if (dedupeRepeated) {
+                    expression = CommutativeOrder.reorder(expression, values);
+                }
                 EvaluatedExpression hit = new EvaluatedExpression(expression, values, value);
                 synchronized (callbackLock) {
                     if (found.get() >= maxSolutions) {
                         generator.cancel();
+                        return;
+                    }
+                    if (seen != null && !seen.add(hit.display())) {
                         return;
                     }
                     long f = found.incrementAndGet();

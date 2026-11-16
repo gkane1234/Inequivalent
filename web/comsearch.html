@@ -27,7 +27,10 @@
             >comsearch</a
           >
           algorithm and checks them against your goal. Nothing is stored ahead of time. The search
-          stops at the max solution count, or when you press Stop.
+          stops at the max solution count, or when you press Stop. Leave Dedupe repeated numbers
+          off to keep each hit in the index order the search already uses. Turn it on and each hit
+          reorders its sums and products by the text of those parts, then a set keeps one copy of
+          each line. The expressions that get checked do not change.
         </p>
       </header>
 
@@ -73,6 +76,10 @@
           <label class="field">
             Goal
             <input id="goal" type="text" inputmode="decimal" value="24" autocomplete="off" />
+          </label>
+          <label class="check">
+            <input id="dedupeRepeated" type="checkbox" />
+            Dedupe repeated numbers
           </label>
           <div class="field">
             <span class="field-label">Max solutions</span>
