@@ -1,5 +1,9 @@
 /* Search meter for expressions checked. Separate from the list-generation bar. */
 
+.checked-below {
+  margin-top: 1.1rem;
+}
+
 .search-progress {
   display: flex;
   align-items: center;
