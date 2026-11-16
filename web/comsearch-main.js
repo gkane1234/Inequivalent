@@ -1,4 +1,4 @@
-import { marked, Renderer } from "./vendor/marked.esm.js";
+import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 8;
 
@@ -24,7 +24,6 @@ const els = {
   maxValue: document.getElementById("maxValue"),
   minSolutions: document.getElementById("minSolutions"),
   maxSolutions: document.getElementById("maxSolutions"),
-  development: document.getElementById("development"),
 };
 
 let mode = "specific";
@@ -351,30 +350,11 @@ els.randomBtn.addEventListener("click", async () => {
   }
 });
 
-function renderDevelopment(markdown) {
-  const renderer = new Renderer();
-  const renderLink = renderer.link;
-  renderer.link = function link(token) {
-    return renderLink.call(this, token).replace("<a ", '<a target="_blank" rel="noopener noreferrer" ');
-  };
-  marked.use({ renderer, gfm: true });
-  const html = marked
-    .parse(markdown)
-    .replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => `<span class="md-math">${tex}</span>`);
-  els.development.innerHTML = html;
-}
-
-async function loadDevelopment() {
-  try {
-    const response = await fetch(new URL("./development.md", import.meta.url));
-    if (!response.ok) throw new Error(`status ${response.status}`);
-    renderDevelopment(await response.text());
-  } catch {
-    els.development.textContent = "The development notes could not be loaded.";
-  }
-}
-
 freshWorker();
 renderNButtons();
 renderValueFields();
-loadDevelopment();
+loadMarkdown(
+  new URL("./comsearch.md", import.meta.url),
+  document.getElementById("comsearch-notes"),
+  "The ComSearch notes could not be loaded."
+);

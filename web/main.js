@@ -1,4 +1,5 @@
 import { initExplainDemo } from "./explain.js";
+import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 6;
 const readyLevels = new Set();
@@ -315,6 +316,11 @@ renderPills();
 renderNButtons();
 renderValueFields();
 initExplainDemo();
+loadMarkdown(
+  new URL("./development.md", import.meta.url),
+  document.getElementById("development"),
+  "The development notes could not be loaded."
+);
 setProgress(0, "Initializing worker…");
 callWorker("init", { force: false }).catch((err) => {
   els.statusLine.textContent = err.message;
