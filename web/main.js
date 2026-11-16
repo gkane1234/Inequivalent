@@ -1,4 +1,5 @@
 import { initExplainDemo } from "./explain.js";
+import { mountGames } from "./games-panel.js";
 import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 6;
@@ -32,6 +33,7 @@ let mode = "specific";
 let selectedN = 4;
 let requestId = 0;
 const pending = new Map();
+const gameReadyListeners = [];
 
 const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 
@@ -79,6 +81,10 @@ function updateRunEnabled() {
   if (els.randomBtn) els.randomBtn.disabled = !ready;
 }
 
+function notifyGameReady() {
+  for (const listener of gameReadyListeners) listener();
+}
+
 function renderValueFields() {
   const n = selectedN;
   const previous = [...els.valueFields.querySelectorAll("input")].map((el) => el.value);
@@ -112,10 +118,10 @@ function reachedCap(count, maxSolutions) {
   return Number.isFinite(maxSolutions) && count >= maxSolutions;
 }
 
-function callWorker(action, payload) {
+function callWorker(action, payload, onProgress) {
   const id = ++requestId;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    pending.set(id, { resolve, reject, onProgress });
     worker.postMessage({ id, action, payload });
   });
 }
@@ -134,6 +140,7 @@ worker.onmessage = (event) => {
     renderPills();
     renderNButtons();
     updateRunEnabled();
+    notifyGameReady();
     setProgress(msg.fraction, msg.message);
     return;
   }
@@ -143,11 +150,17 @@ worker.onmessage = (event) => {
     renderPills();
     renderNButtons();
     updateRunEnabled();
+    notifyGameReady();
     setProgress(1, msg.fromCache ? "Loaded from cache — ready." : "Generation complete — ready.");
     return;
   }
 
   if (msg.type === "solve-progress" || msg.type === "find-attempt") {
+    const entry = pending.get(msg.id);
+    if (entry?.onProgress) {
+      entry.onProgress(msg);
+      return;
+    }
     if (msg.message) els.solveMeta.textContent = msg.message;
     else if (msg.type === "solve-progress") {
       els.solveMeta.textContent = `Scanning… ${msg.evaluated.toLocaleString()} / ${msg.total.toLocaleString()} (found ${msg.found})`;
@@ -304,6 +317,7 @@ els.regenBtn.addEventListener("click", async () => {
   renderPills();
   renderNButtons();
   updateRunEnabled();
+  notifyGameReady();
   setProgress(0, "Regenerating…");
   try {
     await callWorker("init", { force: true });
@@ -322,6 +336,24 @@ loadMarkdown(
   "The development notes could not be loaded."
 );
 setProgress(0, "Initializing worker…");
+mountGames({
+  engineName: "expression list",
+  isReady: (n) => readyLevels.has(n),
+  subscribe(listener) {
+    gameReadyListeners.push(listener);
+    listener();
+  },
+  async solve(values, goal, maxSolutions) {
+    const result = await callWorker("solve", {
+      numValues: values.length,
+      values,
+      goal,
+      maxSolutions,
+      dedupeRepeated: true,
+    });
+    return result.solutions;
+  },
+});
 callWorker("init", { force: false }).catch((err) => {
   els.statusLine.textContent = err.message;
 });

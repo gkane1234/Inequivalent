@@ -1,3 +1,4 @@
+import { canonicalDisplay } from "./canonical.js";
 import { displayExpression } from "./expression.js";
 
 const ROUNDING = 9;
@@ -13,8 +14,10 @@ export function valuesEqual(a, b) {
  * @param {number} goal
  * @param {number} maxSolutions
  * @param {(p: object) => void} [onProgress]
+ * @param {{ dedupeRepeated?: boolean }} [options] when set, reorder sums and products and keep one copy of each line
  */
-export function findAllSolutions(expressionList, values, goal, maxSolutions = 200, onProgress) {
+export function findAllSolutions(expressionList, values, goal, maxSolutions = 200, onProgress, options) {
+  const dedupe = Boolean(options && options.dedupeRepeated);
   const solutions = [];
   const seen = new Set();
   const total = expressionList.numExpressions;
@@ -24,7 +27,7 @@ export function findAllSolutions(expressionList, values, goal, maxSolutions = 20
     const expr = expressionList.get(i);
     const value = expr.evaluateWithValues(values, ROUNDING);
     if (valuesEqual(value, goal)) {
-      const text = displayExpression(expr, values);
+      const text = dedupe ? canonicalDisplay(expr, values) : displayExpression(expr, values);
       if (!seen.has(text)) {
         seen.add(text);
         solutions.push({

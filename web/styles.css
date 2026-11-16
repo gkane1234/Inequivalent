@@ -369,6 +369,70 @@ button.ghost:hover {
   color: var(--muted);
 }
 
+.game-answer:empty::before {
+  content: none;
+}
+
+.games .game-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.games .game-block:first-of-type {
+  margin-top: 0.35rem;
+}
+
+.games h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.games .game-block p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.games button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.number-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.number-chips:empty {
+  display: none;
+}
+
+.number-chips span {
+  min-width: 2.5rem;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.number-chips .goal-chip {
+  color: #1a1206;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.game-answer {
+  margin-top: 0.65rem;
+}
+
 .meta {
   margin-top: 0.5rem;
   font-size: 0.85rem;
