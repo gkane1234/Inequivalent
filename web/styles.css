@@ -337,8 +337,53 @@ footer.note {
   margin: 0.75rem 0 0;
 }
 
-.page-link a {
+.page-link a,
+header.hero a {
   color: var(--accent);
+}
+
+.solver-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  padding: 0.65rem 0;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+.solver-tabs a {
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+
+.solver-tabs a[aria-current="page"] {
+  color: #1a1206;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+button.stop {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: var(--danger);
+}
+
+button.stop:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explain-body .md-math {
+  font-family: var(--mono);
+  font-size: 0.92rem;
 }
 
 .row-2 {

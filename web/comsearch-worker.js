@@ -13,16 +13,24 @@ self.onmessage = (event) => {
       if (!Array.isArray(values) || values.length !== numValues) {
         throw new Error(`expected ${numValues} values`);
       }
-      const result = solveComSearch(values, goal, maxSolutions, (p) => {
-        post({
-          type: "progress",
-          id,
-          checked: p.checked,
-          total: p.total,
-          found: p.found,
-          label: p.done ? "" : `Found ${p.found}`,
-        });
-      });
+      const result = solveComSearch(
+        values,
+        goal,
+        maxSolutions,
+        (p) => {
+          post({
+            type: "progress",
+            id,
+            checked: p.checked,
+            total: p.total,
+            found: p.found,
+            label: p.done ? "" : `Found ${p.found}`,
+          });
+        },
+        (solution) => {
+          post({ type: "solution", id, expression: solution.expression, value: solution.value });
+        }
+      );
       post({ type: "result", id, ok: true, ...result, values, goal });
       return;
     }
@@ -43,16 +51,29 @@ self.onmessage = (event) => {
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const values = Array.from({ length: numValues }, () => Math.floor(Math.random() * (vmax - vmin)) + vmin);
-        const result = solveComSearch(values, goal, smax + 1, (p) => {
-          post({
-            type: "progress",
-            id,
-            checked: p.checked,
-            total: p.total,
-            found: p.found,
-            label: `Attempt ${attempt}/${maxAttempts}: [${values.join(", ")}]`,
-          });
+        post({
+          type: "attempt",
+          id,
+          label: `Attempt ${attempt}/${maxAttempts}: [${values.join(", ")}]`,
         });
+        const result = solveComSearch(
+          values,
+          goal,
+          smax + 1,
+          (p) => {
+            post({
+              type: "progress",
+              id,
+              checked: p.checked,
+              total: p.total,
+              found: p.found,
+              label: `Attempt ${attempt}/${maxAttempts}: [${values.join(", ")}]`,
+            });
+          },
+          (solution) => {
+            post({ type: "solution", id, expression: solution.expression, value: solution.value });
+          }
+        );
         if (result.solutions.length >= smin && result.solutions.length <= smax) {
           post({
             type: "result",

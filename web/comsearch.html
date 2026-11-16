@@ -15,15 +15,26 @@
   </head>
   <body>
     <div class="shell">
+      <nav class="solver-tabs" aria-label="Solvers">
+        <a href="./comsearch.html" aria-current="page">ComSearch</a>
+        <a href="./index.html">Expression list</a>
+      </nav>
       <header class="hero">
         <h1>ComSearch Solver</h1>
         <p>
-          Walks inequivalent expressions with the ComSearch search and checks them against your
-          goal. Nothing is stored ahead of time. The search stops when it reaches the max solution
-          count.
+          Walks inequivalent expressions with the
+          <a href="https://arxiv.org/pdf/2210.07017" target="_blank" rel="noopener noreferrer"
+            >comsearch</a
+          >
+          algorithm and checks them against your goal. Nothing is stored ahead of time. The search
+          stops at the max solution count, or when you press Stop.
         </p>
-        <p class="page-link"><a href="./index.html">Expression-list solver</a></p>
       </header>
+
+      <section class="panel" aria-labelledby="dev-heading">
+        <h2 id="dev-heading">Development</h2>
+        <div class="explain-body" id="development">Loading the development notes…</div>
+      </section>
 
       <section class="panel" aria-labelledby="search-heading">
         <h2 id="search-heading">Checked</h2>
@@ -96,6 +107,7 @@
 
         <div class="actions">
           <button type="button" class="primary" id="runBtn">Solve</button>
+          <button type="button" class="ghost stop" id="stopBtn" disabled>Stop</button>
           <button type="button" class="ghost" id="randomBtn">Random example</button>
         </div>
         <div class="meta" id="solveMeta"></div>

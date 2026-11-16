@@ -11,6 +11,7 @@ const EXPECTED = Object.freeze({
   5: 27142,
   6: 793002,
   7: 27914126,
+  8: 1150212810,
 });
 
 export function expectedCount(n) {
