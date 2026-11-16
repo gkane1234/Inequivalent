@@ -59,10 +59,13 @@
             Goal
             <input id="goal" type="text" inputmode="decimal" value="24" autocomplete="off" />
           </label>
-          <label class="field">
-            Max solutions
-            <input id="maxSolutionsCap" type="text" inputmode="numeric" value="50" autocomplete="off" />
-          </label>
+          <div class="field">
+            <span class="field-label">Max solutions</span>
+            <span class="input-clear">
+              <input id="maxSolutionsCap" type="text" inputmode="numeric" value="1000" autocomplete="off" placeholder="No limit" />
+              <button type="button" class="clear-max" id="clearMaxSolutions" aria-label="Clear max solutions">×</button>
+            </span>
+          </div>
         </div>
 
         <div id="specificPanel">

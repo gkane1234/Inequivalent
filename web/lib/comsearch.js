@@ -269,7 +269,8 @@ function valuesEqual(a, b) {
 export function solveComSearch(values, goal, maxSolutions, onProgress, onSolution, shouldStop) {
   const n = values.length;
   const total = expectedCount(n);
-  const limit = Math.max(1, maxSolutions | 0);
+  const numericLimit = Number(maxSolutions);
+  const limit = Number.isFinite(numericLimit) && numericLimit >= 1 ? Math.floor(numericLimit) : Infinity;
   const solutions = [];
   let checked = 0;
   let cancelled = false;

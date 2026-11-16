@@ -82,7 +82,7 @@ self.onmessage = (event) => {
             values,
             goal,
             attempts: attempt,
-            solutions: result.solutions.slice(0, displayCap),
+            solutions: Number.isFinite(displayCap) ? result.solutions.slice(0, displayCap) : result.solutions,
             solutionCount: result.solutions.length,
             checked: result.checked,
             total: result.total,

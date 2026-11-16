@@ -151,12 +151,41 @@ header.hero p {
   margin-bottom: 1rem;
 }
 
-label.field {
+label.field,
+.field {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.input-clear {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.input-clear input {
+  width: 7.5rem;
+}
+
+button.clear-max {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border));
+  background: transparent;
+  color: var(--danger);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+button.clear-max:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 
 input,

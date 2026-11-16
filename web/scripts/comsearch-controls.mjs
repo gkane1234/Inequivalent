@@ -18,4 +18,13 @@ assert.ok(found.length >= 1);
 assert.equal(result.solutions.length, found.length);
 assert.ok(result.checked < expectedCount(4));
 assert.match(found[0].expression, /3/);
+
+const uncapped = solveComSearch([3, 3, 7, 7], 24, null);
+assert.equal(uncapped.checked, expectedCount(4));
+assert.ok(uncapped.solutions.length >= 4);
+
+const one = solveComSearch([3, 3, 7, 7], 24, 1);
+assert.equal(one.solutions.length, 1);
+assert.ok(one.checked < expectedCount(4));
+
 console.log(`stopped after ${result.checked} checks, first hit ${found[0].expression}`);

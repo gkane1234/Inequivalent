@@ -100,9 +100,15 @@ function renderValueFields() {
 }
 
 function parseMaxSolutionsCap() {
-  const n = Number(els.maxSolutionsCap.value);
-  if (!Number.isFinite(n) || n < 1) return 50;
+  const raw = els.maxSolutionsCap.value.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
   return Math.floor(n);
+}
+
+function reachedCap(count, maxSolutions) {
+  return Number.isFinite(maxSolutions) && count >= maxSolutions;
 }
 
 function callWorker(action, payload) {
@@ -208,10 +214,9 @@ els.runBtn.addEventListener("click", async () => {
         lines.length > 0
           ? lines.join("\n")
           : `No solutions listed for [${values.join(", ")}] → ${goal}`;
-      els.solveMeta.textContent =
-        count >= maxSolutions
-          ? `Found ${count} solution(s) (stopped at max ${maxSolutions}).`
-          : `Found ${count} solution(s).`;
+      els.solveMeta.textContent = reachedCap(count, maxSolutions)
+        ? `Found ${count} solution(s) (stopped at max ${maxSolutions}).`
+        : `Found ${count} solution(s).`;
     } else {
       const boardMax = Number(els.maxSolutions.value);
       const result = await callWorker("findValues", {
@@ -222,16 +227,15 @@ els.runBtn.addEventListener("click", async () => {
         maxAttempts: 1000,
       });
       const count = result.solutions.length;
-      // Cap displayed solutions by the shared max solutions field
-      const shown = result.solutions.slice(0, maxSolutions);
+      const shown = Number.isFinite(maxSolutions) ? result.solutions.slice(0, maxSolutions) : result.solutions;
       const lines = [
         `Values: [${result.values.join(", ")}]  (${result.attempts} attempts)`,
         ...shown.map((s, i) => `${i + 1}. ${s.expression} = ${s.value}`),
       ];
       els.results.textContent = lines.join("\n");
       els.solveMeta.textContent =
-        count > maxSolutions
-          ? `Found ${count} solution(s) for this board; showing ${maxSolutions}.`
+        shown.length < count
+          ? `Found ${count} solution(s) for this board; showing ${shown.length}.`
           : `Found ${count} solution(s) for this board.`;
     }
   } catch (err) {
@@ -278,16 +282,20 @@ els.randomBtn.addEventListener("click", async () => {
       lines.length > 0
         ? lines.join("\n")
         : `No solutions listed for [${result.values.join(", ")}] → ${result.goal}`;
-    els.solveMeta.textContent =
-      count >= maxSolutions
-        ? `Random example: found ${count} solution(s) (stopped at max ${maxSolutions}).`
-        : `Random example: found ${count} solution(s).`;
+    els.solveMeta.textContent = reachedCap(count, maxSolutions)
+      ? `Random example: found ${count} solution(s) (stopped at max ${maxSolutions}).`
+      : `Random example: found ${count} solution(s).`;
   } catch (err) {
     els.results.textContent = "";
     els.solveMeta.textContent = err.message;
   } finally {
     updateRunEnabled();
   }
+});
+
+document.getElementById("clearMaxSolutions").addEventListener("click", () => {
+  els.maxSolutionsCap.value = "";
+  els.maxSolutionsCap.focus();
 });
 
 els.regenBtn.addEventListener("click", async () => {

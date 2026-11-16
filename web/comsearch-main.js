@@ -84,9 +84,15 @@ function renderValueFields() {
 }
 
 function parseMaxSolutionsCap() {
-  const n = Number(els.maxSolutionsCap.value);
-  if (!Number.isFinite(n) || n < 1) return 50;
+  const raw = els.maxSolutionsCap.value.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
   return Math.floor(n);
+}
+
+function reachedCap(count, maxSolutions) {
+  return Number.isFinite(maxSolutions) && count >= maxSolutions;
 }
 
 function formatShownValue(value) {
@@ -212,16 +218,15 @@ function callWorker(action, payload) {
 function finishSpecific(result, values, goal, maxSolutions, prefix) {
   replaceShown(result.solutions);
   showChecked(result.checked, result.total);
-  els.searchLabel.textContent =
-    result.solutions.length >= maxSolutions ? "Stopped at the max solution count." : "Search finished.";
+  const capped = reachedCap(result.solutions.length, maxSolutions);
+  els.searchLabel.textContent = capped ? "Stopped at the max solution count." : "Search finished.";
   if (!result.solutions.length) {
     els.results.textContent = `No solutions listed for [${values.join(", ")}] → ${goal}`;
   }
   const lead = prefix ? `${prefix}: ` : "";
-  els.solveMeta.textContent =
-    result.solutions.length >= maxSolutions
-      ? `${lead}Found ${result.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
-      : `${lead}Found ${result.solutions.length} solution(s).`;
+  els.solveMeta.textContent = capped
+    ? `${lead}Found ${result.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
+    : `${lead}Found ${result.solutions.length} solution(s).`;
 }
 
 els.modeSpecific.addEventListener("click", () => {
@@ -241,6 +246,11 @@ els.modeFind.addEventListener("click", () => {
 });
 
 els.stopBtn.addEventListener("click", () => stopSearch());
+
+document.getElementById("clearMaxSolutions").addEventListener("click", () => {
+  els.maxSolutionsCap.value = "";
+  els.maxSolutionsCap.focus();
+});
 
 els.runBtn.addEventListener("click", async () => {
   const numValues = selectedN;
