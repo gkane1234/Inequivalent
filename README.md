@@ -80,7 +80,7 @@ npx serve web -p 5173
 
 ## Usage
 
-`ComSearchExplorer` is the Java UI. Choose how many numbers are in the expression and a goal value. Type the numbers, or set a range and randomize them. Start streams matches as they are found. Stop keeps the output already printed.
+`ComSearchExplorer` is the Java UI. Choose how many numbers are in the expression and a goal value. Type the numbers, or set a range and randomize them. Start streams matches as they are found. Stop keeps the output already printed. Leave Dedupe repeated numbers off to keep each hit in the index order the search already uses. Turn it on and each hit reorders its sums and products by the text of those parts, then a set keeps one copy of each line. The expressions that get checked do not change.
 
 
 ## Development

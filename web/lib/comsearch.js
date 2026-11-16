@@ -139,6 +139,37 @@ function foldForward(parts, len, op) {
   return acc;
 }
 
+function flattenCommutative(node, op, out) {
+  if (!node.leaf && node.op === op) {
+    flattenCommutative(node.left, op, out);
+    flattenCommutative(node.right, op, out);
+  } else {
+    out.push(node);
+  }
+}
+
+/** Flatten + and * chains and sort those parts by display text. Does not mutate shared nodes. */
+function reorderCommutative(node, values) {
+  if (node.leaf) return node;
+  const left = reorderCommutative(node.left, values);
+  const right = reorderCommutative(node.right, values);
+  if (node.op !== OP_ADD && node.op !== OP_MUL) {
+    if (left === node.left && right === node.right) return node;
+    return combine(left, right, node.op);
+  }
+  const parts = [];
+  flattenCommutative(left, node.op, parts);
+  flattenCommutative(right, node.op, parts);
+  parts.sort((a, b) => {
+    const ka = formatTree(a, values);
+    const kb = formatTree(b, values);
+    if (ka < kb) return -1;
+    if (ka > kb) return 1;
+    return 0;
+  });
+  return foldForward(parts, parts.length, node.op);
+}
+
 function sortByMinLeaf(arr, len) {
   for (let i = 1; i < len; i++) {
     const key = arr[i];
@@ -265,10 +296,13 @@ function valuesEqual(a, b) {
  * @param {(p: {checked: number, total: number, found: number, done?: boolean}) => void} [onProgress]
  * @param {(solution: {expression: string, value: number}) => void} [onSolution]
  * @param {() => boolean} [shouldStop] checked between steps so a caller can interrupt
+ * @param {{ dedupeRepeated?: boolean }} [options] when dedupeRepeated is set, reorder sums and products by text and keep one copy of each line
  */
-export function solveComSearch(values, goal, maxSolutions, onProgress, onSolution, shouldStop) {
+export function solveComSearch(values, goal, maxSolutions, onProgress, onSolution, shouldStop, options) {
   const n = values.length;
   const total = expectedCount(n);
+  const dedupe = Boolean(options && options.dedupeRepeated);
+  const seen = dedupe ? new Set() : null;
   const numericLimit = Number(maxSolutions);
   const limit = Number.isFinite(numericLimit) && numericLimit >= 1 ? Math.floor(numericLimit) : Infinity;
   const solutions = [];
@@ -295,7 +329,15 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
     report(false);
     const value = round9(raw);
     if (valuesEqual(value, goal)) {
-      const solution = { expression: materialize(), value };
+      const tree = materialize();
+      const expression = dedupe
+        ? formatTree(reorderCommutative(tree, values), values)
+        : formatTree(tree, values);
+      if (seen) {
+        if (seen.has(expression)) return;
+        seen.add(expression);
+      }
+      const solution = { expression, value };
       solutions.push(solution);
       if (onSolution) onSolution(solution);
       if (solutions.length >= limit) cancelled = true;
@@ -328,8 +370,8 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
       sink(
         value,
         hasSub,
-        () => formatTree(buildAdditive(snapshot, minIndex, freeMask), values),
-        () => formatTree(negateNode(buildAdditive(snapshot, minIndex, freeMask)), values)
+        () => buildAdditive(snapshot, minIndex, freeMask),
+        () => negateNode(buildAdditive(snapshot, minIndex, freeMask))
       );
     }
   }
@@ -351,8 +393,8 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
       sink(
         value,
         childHasSub,
-        () => formatTree(buildMultiplicative(snapshot, mask), values),
-        () => formatTree(negateNode(buildMultiplicative(snapshot, mask)), values)
+        () => buildMultiplicative(snapshot, mask),
+        () => negateNode(buildMultiplicative(snapshot, mask))
       );
     }
   }
@@ -437,7 +479,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
   }
 
   if (n === 1) {
-    consider(leafNodes[0].value, () => formatTree(leafNodes[0], values));
+    consider(leafNodes[0].value, () => leafNodes[0]);
   } else {
     const leaves = values.map((_, i) => i);
     forEachUnorderedPartition(leaves, (partition) => runRootJobSearch(true, partition), isCancelled);

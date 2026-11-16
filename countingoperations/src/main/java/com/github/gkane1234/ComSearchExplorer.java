@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -35,6 +36,7 @@ public class ComSearchExplorer extends JFrame {
     private final JPanel valuesPanel;
     private JTextField[] valueFields;
     private final JTextField goalField;
+    private final JCheckBox dedupeRepeatedBox;
     private final JTextArea outputArea;
     private final JLabel statusLabel;
     private final JButton startButton;
@@ -79,6 +81,8 @@ public class ComSearchExplorer extends JFrame {
         top.add(new JLabel("Goal:"));
         goalField = new JTextField("24", 8);
         top.add(goalField);
+        dedupeRepeatedBox = new JCheckBox("Dedupe repeated numbers");
+        top.add(dedupeRepeatedBox);
         controls.add(top, BorderLayout.NORTH);
 
         valuesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
@@ -111,7 +115,17 @@ public class ComSearchExplorer extends JFrame {
         JScrollPane scroll = new JScrollPane(outputArea);
         scroll.setPreferredSize(new Dimension(640, 360));
         scroll.setBorder(BorderFactory.createTitledBorder("Solutions (live)"));
-        add(scroll, BorderLayout.CENTER);
+        JLabel runExplanation = new JLabel("<html><body style='width:620px'>"
+                + "The search walks inequivalent expressions and checks them against the goal. "
+                + "Nothing is stored ahead of time, and Stop keeps the lines already printed. "
+                + "Leave Dedupe repeated numbers off to keep each hit in the index order the search already uses. "
+                + "Turn it on and each hit reorders its sums and products by the text of those parts, "
+                + "then a set keeps one copy of each line. The expressions that get checked do not change."
+                + "</body></html>");
+        JPanel center = new JPanel(new BorderLayout(0, 6));
+        center.add(runExplanation, BorderLayout.NORTH);
+        center.add(scroll, BorderLayout.CENTER);
+        add(center, BorderLayout.CENTER);
 
         statusLabel = new JLabel("Ready. Set count/range, Randomize or type values, then Start.");
         add(statusLabel, BorderLayout.SOUTH);
@@ -187,6 +201,7 @@ public class ComSearchExplorer extends JFrame {
         }
 
         int n = values.length;
+        final boolean dedupeRepeated = dedupeRepeatedBox.isSelected();
         solver = new Solver(n);
         solutionCount.set(0);
         checkedCount.set(0);
@@ -196,7 +211,11 @@ public class ComSearchExplorer extends JFrame {
         statusLabel.setText(formatStatus(0, 0, 0)
                 + "  Enumerating n=" + n + " (hits appear live; Stop anytime)…");
         appendLine("--- start: values=" + java.util.Arrays.toString(values)
-                + " goal=" + goal + " (streaming enumeration; Stop keeps results) ---");
+                + " goal=" + goal + " ("
+                + (dedupeRepeated
+                    ? "dedupe on: sums and products ordered by text, one copy of each line"
+                    : "dedupe off: index order, every labeled hit")
+                + "; Stop keeps results) ---");
 
         worker = new SwingWorker<Void, String>() {
             private Solver.SearchStats lastStats = new Solver.SearchStats(0, 0);
@@ -218,7 +237,8 @@ public class ComSearchExplorer extends JFrame {
                             solutionCount.set((int) Math.min(stats.found, Integer.MAX_VALUE));
                             checkedCount.set(stats.checked);
                             publish("STAT");
-                        });
+                        },
+                        dedupeRepeated);
                 elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
                 return null;
             }
@@ -325,6 +345,7 @@ public class ComSearchExplorer extends JFrame {
         minRangeField.setEnabled(!running);
         maxRangeField.setEnabled(!running);
         goalField.setEnabled(!running);
+        dedupeRepeatedBox.setEnabled(!running);
         if (valueFields != null) {
             for (JTextField field : valueFields) {
                 field.setEnabled(!running);

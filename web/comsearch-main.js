@@ -24,6 +24,7 @@ const els = {
   maxValue: document.getElementById("maxValue"),
   minSolutions: document.getElementById("minSolutions"),
   maxSolutions: document.getElementById("maxSolutions"),
+  dedupeRepeated: document.getElementById("dedupeRepeated"),
 };
 
 let mode = "specific";
@@ -46,6 +47,7 @@ function setBusy(busy) {
   els.runBtn.disabled = busy;
   els.randomBtn.disabled = busy;
   els.stopBtn.disabled = !busy;
+  els.dedupeRepeated.disabled = busy;
 }
 
 function renderNButtons() {
@@ -264,7 +266,13 @@ els.runBtn.addEventListener("click", async () => {
   try {
     if (mode === "specific") {
       const values = [...els.valueFields.querySelectorAll("input")].map((el) => Number(el.value));
-      const result = await callWorker("solve", { numValues, values, goal, maxSolutions });
+      const result = await callWorker("solve", {
+        numValues,
+        values,
+        goal,
+        maxSolutions,
+        dedupeRepeated: els.dedupeRepeated.checked,
+      });
       finishSpecific(result, values, goal, maxSolutions);
     } else {
       const boardMax = Number(els.maxSolutions.value);
@@ -275,6 +283,7 @@ els.runBtn.addEventListener("click", async () => {
         solutionRange: [Number(els.minSolutions.value), boardMax],
         maxAttempts: 1000,
         displayCap: maxSolutions,
+        dedupeRepeated: els.dedupeRepeated.checked,
       });
       replaceShown(result.solutions);
       showChecked(result.checked, result.total);
@@ -332,6 +341,7 @@ els.randomBtn.addEventListener("click", async () => {
       values: result.values,
       goal: result.goal,
       maxSolutions,
+      dedupeRepeated: els.dedupeRepeated.checked,
     });
     finishSpecific(solved, result.values, result.goal, maxSolutions, "Random example");
   } catch (err) {
