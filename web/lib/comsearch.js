@@ -263,18 +263,21 @@ function valuesEqual(a, b) {
  * @param {number} goal
  * @param {number} maxSolutions
  * @param {(p: {checked: number, total: number, found: number, done?: boolean}) => void} [onProgress]
+ * @param {(solution: {expression: string, value: number}) => void} [onSolution]
+ * @param {() => boolean} [shouldStop] checked between steps so a caller can interrupt
  */
-export function solveComSearch(values, goal, maxSolutions, onProgress) {
+export function solveComSearch(values, goal, maxSolutions, onProgress, onSolution, shouldStop) {
   const n = values.length;
   const total = expectedCount(n);
-  const limit = Math.max(1, maxSolutions | 0);
+  const numericLimit = Number(maxSolutions);
+  const limit = Number.isFinite(numericLimit) && numericLimit >= 1 ? Math.floor(numericLimit) : Infinity;
   const solutions = [];
   let checked = 0;
   let cancelled = false;
-  const reportEvery = n >= 6 ? 5000 : 1000;
+  const reportEvery = n >= 7 ? 20000 : n >= 6 ? 5000 : 1000;
 
   const leafNodes = values.map((value, i) => leaf(i, value));
-  const isCancelled = () => cancelled;
+  const isCancelled = () => cancelled || Boolean(shouldStop && shouldStop());
 
   function report(done = false) {
     if (!onProgress) return;
@@ -283,7 +286,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function consider(raw, materialize) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     if (solutions.length >= limit) {
       cancelled = true;
       return;
@@ -292,13 +295,15 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
     report(false);
     const value = round9(raw);
     if (valuesEqual(value, goal)) {
-      solutions.push({ expression: materialize(), value });
+      const solution = { expression: materialize(), value };
+      solutions.push(solution);
+      if (onSolution) onSolution(solution);
       if (solutions.length >= limit) cancelled = true;
     }
   }
 
   function sink(raw, hasSub, materialize, materializeOpposite) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     consider(raw, materialize);
     if (!cancelled && hasSub) consider(-raw, materializeOpposite);
   }
@@ -308,14 +313,14 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function combineAdditiveToSink(children) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const g = children.length;
     const minIndex = indexOfMinLeaf(children);
     const childHasSub = anyHasSub(children);
     const freeLimit = 2 ** (g - 1);
     const snapshot = children.slice();
     for (let freeMask = 0; freeMask < freeLimit; freeMask++) {
-      if (cancelled) return;
+      if (isCancelled()) return;
       const { pos, posN, neg, negN } = splitAdditive(snapshot, minIndex, freeMask);
       let value = foldValue(pos, posN, OP_ADD);
       if (negN > 0) value -= foldValue(neg, negN, OP_ADD);
@@ -330,13 +335,13 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function combineMultiplicativeToSink(children) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const g = children.length;
     const childHasSub = anyHasSub(children);
     const maskLimit = 2 ** g;
     const snapshot = children.slice();
     for (let mask = 1; mask < maskLimit; mask++) {
-      if (cancelled) return;
+      if (isCancelled()) return;
       const { numer, numerN, denom, denomN } = splitMultiplicative(snapshot, mask);
       let value = foldValue(numer, numerN, OP_MUL);
       if (denomN > 0) {
@@ -353,12 +358,12 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function combineAdditive(children, out) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const g = children.length;
     const minIndex = indexOfMinLeaf(children);
     const freeLimit = 2 ** (g - 1);
     for (let freeMask = 0; freeMask < freeLimit; freeMask++) {
-      if (cancelled) return;
+      if (isCancelled()) return;
       const { pos, posN, neg, negN } = splitAdditive(children, minIndex, freeMask);
       const left = foldForward(pos, posN, OP_ADD);
       if (negN === 0) out(left);
@@ -367,11 +372,11 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function combineMultiplicative(children, out) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const g = children.length;
     const maskLimit = 2 ** g;
     for (let mask = 1; mask < maskLimit; mask++) {
-      if (cancelled) return;
+      if (isCancelled()) return;
       const { numer, numerN, denom, denomN } = splitMultiplicative(children, mask);
       const left = foldForward(numer, numerN, OP_MUL);
       if (denomN === 0) out(left);
@@ -380,14 +385,14 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function chooseChildren(index, partition, additive, chosen, onComplete) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     if (index === partition.length) {
       onComplete();
       return;
     }
     const block = partition[index];
     const onChild = (child) => {
-      if (cancelled) return;
+      if (isCancelled()) return;
       chosen[index] = child;
       chooseChildren(index + 1, partition, additive, chosen, onComplete);
     };
@@ -396,7 +401,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function runRootJob(additive, partition, out) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const chosen = new Array(partition.length);
     chooseChildren(0, partition, additive, chosen, () => {
       if (additive) combineAdditive(chosen, out);
@@ -405,7 +410,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function runRootJobSearch(additive, partition) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     const chosen = new Array(partition.length);
     chooseChildren(0, partition, additive, chosen, () => {
       if (additive) combineAdditiveToSink(chosen);
@@ -414,7 +419,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function genAdd(leaves, out) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     if (leaves.length === 1) {
       out(leafV(leaves[0]));
       return;
@@ -423,7 +428,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress) {
   }
 
   function genMul(leaves, out) {
-    if (cancelled) return;
+    if (isCancelled()) return;
     if (leaves.length === 1) {
       out(leafV(leaves[0]));
       return;

@@ -151,12 +151,41 @@ header.hero p {
   margin-bottom: 1rem;
 }
 
-label.field {
+label.field,
+.field {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.input-clear {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.input-clear input {
+  width: 7.5rem;
+}
+
+button.clear-max {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border));
+  background: transparent;
+  color: var(--danger);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+button.clear-max:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
 
 input,
@@ -337,8 +366,53 @@ footer.note {
   margin: 0.75rem 0 0;
 }
 
-.page-link a {
+.page-link a,
+header.hero a {
   color: var(--accent);
+}
+
+.solver-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  padding: 0.65rem 0;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+
+.solver-tabs a {
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+
+.solver-tabs a[aria-current="page"] {
+  color: #1a1206;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+button.stop {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: var(--danger);
+}
+
+button.stop:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.explain-body .md-math {
+  font-family: var(--mono);
+  font-size: 0.92rem;
 }
 
 .row-2 {
@@ -354,11 +428,23 @@ footer.note {
 }
 
 /* How it works */
+.explain-body h2,
 .explain-body h3 {
   margin: 1.35rem 0 0.45rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.explain-body ul,
+.explain-body ol {
+  margin: 0 0 0.85rem;
+  padding-left: 1.25rem;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+}
+
+.explain-body li {
+  margin-bottom: 0.35rem;
 }
 
 .explain-body h3:first-child {

@@ -31,7 +31,7 @@ export function findAllSolutions(expressionList, values, goal, maxSolutions = 20
           expression: text,
           value,
         });
-        if (solutions.length >= maxSolutions) break;
+        if (Number.isFinite(maxSolutions) && solutions.length >= maxSolutions) break;
       }
     }
     if (onProgress && i % reportEvery === 0) {

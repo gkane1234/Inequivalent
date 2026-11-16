@@ -1,4 +1,6 @@
-const TARGET_N = 6;
+import { loadMarkdown } from "./lib/markdown.js";
+
+const TARGET_N = 8;
 
 const els = {
   searchTrack: document.getElementById("searchTrack"),
@@ -14,6 +16,7 @@ const els = {
   specificPanel: document.getElementById("specificPanel"),
   findPanel: document.getElementById("findPanel"),
   runBtn: document.getElementById("runBtn"),
+  stopBtn: document.getElementById("stopBtn"),
   randomBtn: document.getElementById("randomBtn"),
   results: document.getElementById("results"),
   solveMeta: document.getElementById("solveMeta"),
@@ -27,13 +30,22 @@ let mode = "specific";
 let selectedN = 4;
 let requestId = 0;
 let activeId = 0;
+let closedId = 0;
+let shown = [];
 const pending = new Map();
+let worker = null;
+let stopping = false;
 
-const worker = new Worker(new URL("./comsearch-worker.js", import.meta.url), { type: "module" });
+function stoppedError() {
+  const err = new Error("Stopped.");
+  err.stopped = true;
+  return err;
+}
 
 function setBusy(busy) {
   els.runBtn.disabled = busy;
   els.randomBtn.disabled = busy;
+  els.stopBtn.disabled = !busy;
 }
 
 function renderNButtons() {
@@ -54,7 +66,7 @@ function renderNButtons() {
 
 function renderValueFields() {
   const previous = [...els.valueFields.querySelectorAll("input")].map((el) => el.value);
-  const defaults = ["3", "3", "7", "7", "1", "2"];
+  const defaults = ["3", "3", "7", "7", "1", "2", "5", "8"];
   els.valueFields.innerHTML = "";
   for (let i = 0; i < selectedN; i++) {
     const label = document.createElement("label");
@@ -71,9 +83,15 @@ function renderValueFields() {
 }
 
 function parseMaxSolutionsCap() {
-  const n = Number(els.maxSolutionsCap.value);
-  if (!Number.isFinite(n) || n < 1) return 50;
+  const raw = els.maxSolutionsCap.value.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return null;
   return Math.floor(n);
+}
+
+function reachedCap(count, maxSolutions) {
+  return Number.isFinite(maxSolutions) && count >= maxSolutions;
 }
 
 function formatShownValue(value) {
@@ -99,42 +117,115 @@ function resetChecked() {
   els.searchLabel.textContent = "Checking…";
 }
 
+function solutionLines(solutions) {
+  return solutions.map((s, i) => `${i + 1}. ${s.expression} = ${formatShownValue(s.value)}`);
+}
+
+function renderShown() {
+  els.results.textContent = shown.length ? solutionLines(shown).join("\n") : "";
+}
+
+function resetShown() {
+  shown = [];
+  renderShown();
+}
+
+function addShown(solution) {
+  shown.push({ expression: solution.expression, value: solution.value });
+  renderShown();
+  if (closedId && !activeId) {
+    els.solveMeta.textContent = `Stopped. Showing ${shown.length} solution(s) found so far.`;
+  }
+}
+
+function replaceShown(solutions) {
+  shown = solutions.map((solution) => ({ expression: solution.expression, value: solution.value }));
+  renderShown();
+}
+
+function bindWorker(target) {
+  target.onmessage = (event) => {
+    const msg = event.data;
+    if (msg.id === closedId) {
+      if (msg.type === "solution") addShown(msg);
+      return;
+    }
+    if (msg.id !== activeId) return;
+    if (msg.type === "progress") {
+      showChecked(msg.checked, msg.total);
+      if (msg.label) els.searchLabel.textContent = msg.label;
+      return;
+    }
+    if (msg.type === "attempt") {
+      resetShown();
+      if (msg.label) els.searchLabel.textContent = msg.label;
+      return;
+    }
+    if (msg.type === "solution") {
+      addShown(msg);
+      return;
+    }
+    if (msg.type === "result") {
+      const entry = pending.get(msg.id);
+      if (!entry) return;
+      pending.delete(msg.id);
+      if (msg.ok) entry.resolve(msg);
+      else entry.reject(new Error(msg.error || "Worker error"));
+    }
+  };
+
+  target.onerror = (err) => {
+    if (target !== worker || stopping) return;
+    const message = err.message || "The solver stopped unexpectedly";
+    els.searchLabel.textContent = message;
+    for (const [, entry] of pending) entry.reject(new Error(message));
+    pending.clear();
+    setBusy(false);
+  };
+}
+
+function freshWorker() {
+  worker = new Worker(new URL("./comsearch-worker.js", import.meta.url), { type: "module" });
+  bindWorker(worker);
+}
+
+function stopSearch() {
+  if (!worker || els.stopBtn.disabled) return;
+  stopping = true;
+  const id = activeId;
+  closedId = id;
+  activeId = 0;
+  worker.terminate();
+  freshWorker();
+  const entry = pending.get(id);
+  if (entry) {
+    pending.delete(id);
+    entry.reject(stoppedError());
+  }
+}
+
 function callWorker(action, payload) {
   const id = ++requestId;
   activeId = id;
+  closedId = 0;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     worker.postMessage({ id, action, payload });
   });
 }
 
-worker.onmessage = (event) => {
-  const msg = event.data;
-  if (msg.type === "progress") {
-    if (msg.id !== activeId) return;
-    showChecked(msg.checked, msg.total);
-    if (msg.label) els.searchLabel.textContent = msg.label;
-    return;
+function finishSpecific(result, values, goal, maxSolutions, prefix) {
+  replaceShown(result.solutions);
+  showChecked(result.checked, result.total);
+  const capped = reachedCap(result.solutions.length, maxSolutions);
+  els.searchLabel.textContent = capped ? "Stopped at the max solution count." : "Search finished.";
+  if (!result.solutions.length) {
+    els.results.textContent = `No solutions listed for [${values.join(", ")}] → ${goal}`;
   }
-  if (msg.type === "result") {
-    const entry = pending.get(msg.id);
-    if (!entry) return;
-    pending.delete(msg.id);
-    if (msg.ok) entry.resolve(msg);
-    else entry.reject(new Error(msg.error || "Worker error"));
-  }
-};
-
-worker.onerror = (err) => {
-  const message = err.message || "The solver stopped unexpectedly";
-  els.searchLabel.textContent = message;
-  for (const [, entry] of pending) entry.reject(new Error(message));
-  pending.clear();
-  setBusy(false);
-};
-
-function solutionLines(solutions) {
-  return solutions.map((s, i) => `${i + 1}. ${s.expression} = ${formatShownValue(s.value)}`);
+  const lead = prefix ? `${prefix}: ` : "";
+  els.solveMeta.textContent = capped
+    ? `${lead}Found ${result.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
+    : `${lead}Found ${result.solutions.length} solution(s).`;
 }
 
 els.modeSpecific.addEventListener("click", () => {
@@ -153,12 +244,20 @@ els.modeFind.addEventListener("click", () => {
   els.specificPanel.classList.add("hidden");
 });
 
+els.stopBtn.addEventListener("click", () => stopSearch());
+
+document.getElementById("clearMaxSolutions").addEventListener("click", () => {
+  els.maxSolutionsCap.value = "";
+  els.maxSolutionsCap.focus();
+});
+
 els.runBtn.addEventListener("click", async () => {
   const numValues = selectedN;
   const goal = Number(els.goal.value);
   const maxSolutions = parseMaxSolutionsCap();
+  stopping = false;
   setBusy(true);
-  els.results.textContent = "";
+  resetShown();
   els.solveMeta.textContent = "Working…";
   resetChecked();
 
@@ -166,16 +265,7 @@ els.runBtn.addEventListener("click", async () => {
     if (mode === "specific") {
       const values = [...els.valueFields.querySelectorAll("input")].map((el) => Number(el.value));
       const result = await callWorker("solve", { numValues, values, goal, maxSolutions });
-      showChecked(result.checked, result.total);
-      els.searchLabel.textContent =
-        result.solutions.length >= maxSolutions ? "Stopped at the max solution count." : "Search finished.";
-      const lines = solutionLines(result.solutions);
-      els.results.textContent =
-        lines.length > 0 ? lines.join("\n") : `No solutions listed for [${values.join(", ")}] → ${goal}`;
-      els.solveMeta.textContent =
-        result.solutions.length >= maxSolutions
-          ? `Found ${result.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
-          : `Found ${result.solutions.length} solution(s).`;
+      finishSpecific(result, values, goal, maxSolutions);
     } else {
       const boardMax = Number(els.maxSolutions.value);
       const result = await callWorker("findValues", {
@@ -186,13 +276,10 @@ els.runBtn.addEventListener("click", async () => {
         maxAttempts: 1000,
         displayCap: maxSolutions,
       });
+      replaceShown(result.solutions);
       showChecked(result.checked, result.total);
       els.searchLabel.textContent = `Found a board in ${result.attempts} attempt(s).`;
-      const shown = result.solutions;
-      const lines = [
-        `Values: [${result.values.join(", ")}]  (${result.attempts} attempts)`,
-        ...solutionLines(shown),
-      ];
+      const lines = [`Values: [${result.values.join(", ")}]  (${result.attempts} attempts)`, ...solutionLines(shown)];
       els.results.textContent = lines.join("\n");
       const count = result.solutionCount;
       els.solveMeta.textContent =
@@ -201,6 +288,13 @@ els.runBtn.addEventListener("click", async () => {
           : `Found ${count} solution(s) for this board.`;
     }
   } catch (err) {
+    if (err.stopped) {
+      els.searchLabel.textContent = "Stopped.";
+      els.solveMeta.textContent = shown.length
+        ? `Stopped. Showing ${shown.length} solution(s) found so far.`
+        : "Stopped before a solution was found.";
+      return;
+    }
     els.results.textContent = "";
     els.solveMeta.textContent = err.message;
     els.searchLabel.textContent = err.message;
@@ -216,8 +310,9 @@ els.randomBtn.addEventListener("click", async () => {
   els.specificPanel.classList.remove("hidden");
   els.findPanel.classList.add("hidden");
 
+  stopping = false;
   setBusy(true);
-  els.results.textContent = "";
+  resetShown();
   els.solveMeta.textContent = "Picking a random example…";
   resetChecked();
 
@@ -238,19 +333,15 @@ els.randomBtn.addEventListener("click", async () => {
       goal: result.goal,
       maxSolutions,
     });
-    showChecked(solved.checked, solved.total);
-    els.searchLabel.textContent =
-      solved.solutions.length >= maxSolutions ? "Stopped at the max solution count." : "Search finished.";
-    const lines = solutionLines(solved.solutions);
-    els.results.textContent =
-      lines.length > 0
-        ? lines.join("\n")
-        : `No solutions listed for [${result.values.join(", ")}] → ${result.goal}`;
-    els.solveMeta.textContent =
-      solved.solutions.length >= maxSolutions
-        ? `Random example: found ${solved.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
-        : `Random example: found ${solved.solutions.length} solution(s).`;
+    finishSpecific(solved, result.values, result.goal, maxSolutions, "Random example");
   } catch (err) {
+    if (err.stopped) {
+      els.searchLabel.textContent = "Stopped.";
+      els.solveMeta.textContent = shown.length
+        ? `Stopped. Showing ${shown.length} solution(s) found so far.`
+        : "Stopped before a solution was found.";
+      return;
+    }
     els.results.textContent = "";
     els.solveMeta.textContent = err.message;
     els.searchLabel.textContent = err.message;
@@ -259,5 +350,11 @@ els.randomBtn.addEventListener("click", async () => {
   }
 });
 
+freshWorker();
 renderNButtons();
 renderValueFields();
+loadMarkdown(
+  new URL("./comsearch.md", import.meta.url),
+  document.getElementById("comsearch-notes"),
+  "The ComSearch notes could not be loaded."
+);

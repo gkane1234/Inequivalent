@@ -15,15 +15,26 @@
   </head>
   <body>
     <div class="shell">
+      <nav class="solver-tabs" aria-label="Solvers">
+        <a href="./comsearch.html" aria-current="page">ComSearch</a>
+        <a href="./index.html">Expression list</a>
+      </nav>
       <header class="hero">
         <h1>ComSearch Solver</h1>
         <p>
-          Walks inequivalent expressions with the ComSearch search and checks them against your
-          goal. Nothing is stored ahead of time. The search stops when it reaches the max solution
-          count.
+          Walks inequivalent expressions with the
+          <a href="https://arxiv.org/pdf/2210.07017" target="_blank" rel="noopener noreferrer"
+            >comsearch</a
+          >
+          algorithm and checks them against your goal. Nothing is stored ahead of time. The search
+          stops at the max solution count, or when you press Stop.
         </p>
-        <p class="page-link"><a href="./index.html">Expression-list solver</a></p>
       </header>
+
+      <section class="panel" aria-labelledby="notes-heading">
+        <h2 id="notes-heading">ComSearch</h2>
+        <div class="explain-body" id="comsearch-notes">Loading the ComSearch notes…</div>
+      </section>
 
       <section class="panel" aria-labelledby="search-heading">
         <h2 id="search-heading">Checked</h2>
@@ -63,10 +74,13 @@
             Goal
             <input id="goal" type="text" inputmode="decimal" value="24" autocomplete="off" />
           </label>
-          <label class="field">
-            Max solutions
-            <input id="maxSolutionsCap" type="text" inputmode="numeric" value="50" autocomplete="off" />
-          </label>
+          <div class="field">
+            <span class="field-label">Max solutions</span>
+            <span class="input-clear">
+              <input id="maxSolutionsCap" type="text" inputmode="numeric" value="1000" autocomplete="off" placeholder="No limit" />
+              <button type="button" class="clear-max" id="clearMaxSolutions" aria-label="Clear max solutions">×</button>
+            </span>
+          </div>
         </div>
 
         <div id="specificPanel">
@@ -96,6 +110,7 @@
 
         <div class="actions">
           <button type="button" class="primary" id="runBtn">Solve</button>
+          <button type="button" class="ghost stop" id="stopBtn" disabled>Stop</button>
           <button type="button" class="ghost" id="randomBtn">Random example</button>
         </div>
         <div class="meta" id="solveMeta"></div>
