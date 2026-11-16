@@ -1,3 +1,4 @@
+import { mountGames } from "./games-panel.js";
 import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 8;
@@ -363,6 +364,54 @@ els.randomBtn.addEventListener("click", async () => {
 freshWorker();
 renderNButtons();
 renderValueFields();
+mountComSearchGames();
+function mountComSearchGames() {
+  const gameWorker = new Worker(new URL("./comsearch-worker.js", import.meta.url), { type: "module" });
+  let seq = 0;
+  const pendingGames = new Map();
+
+  gameWorker.onmessage = (event) => {
+    const msg = event.data;
+    if (msg.type !== "result") return;
+    const entry = pendingGames.get(msg.id);
+    if (!entry) return;
+    pendingGames.delete(msg.id);
+    if (msg.ok) entry.resolve(msg.solutions);
+    else entry.reject(new Error(msg.error || "Worker error"));
+  };
+
+  gameWorker.onerror = (err) => {
+    const message = err.message || "The solver stopped unexpectedly";
+    for (const [, entry] of pendingGames) entry.reject(new Error(message));
+    pendingGames.clear();
+  };
+
+  mountGames({
+    engineName: "ComSearch",
+    isReady: () => true,
+    subscribe(listener) {
+      listener();
+    },
+    solve(values, goal, maxSolutions) {
+      const id = ++seq;
+      return new Promise((resolve, reject) => {
+        pendingGames.set(id, { resolve, reject });
+        gameWorker.postMessage({
+          id,
+          action: "solve",
+          payload: {
+            numValues: values.length,
+            values,
+            goal,
+            maxSolutions,
+            dedupeRepeated: true,
+          },
+        });
+      });
+    },
+  });
+}
+
 loadMarkdown(
   new URL("./comsearch.md", import.meta.url),
   document.getElementById("comsearch-notes"),

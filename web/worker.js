@@ -107,10 +107,17 @@ async function handleSearch(msg) {
   const { id, action, payload } = msg;
   try {
     if (action === "solve") {
-      const { numValues, values, goal, maxSolutions = 200 } = payload;
+      const { numValues, values, goal, maxSolutions = 200, dedupeRepeated = false } = payload;
       const list = lists[numValues];
       if (!list) throw new Error(`Expressions for n=${numValues} not ready yet`);
-      const solutions = findAllSolutions(list, values, goal, maxSolutions, (p) => post({ ...p, id }));
+      const solutions = findAllSolutions(
+        list,
+        values,
+        goal,
+        maxSolutions,
+        (p) => post({ ...p, id }),
+        { dedupeRepeated }
+      );
       post({ type: "result", id, ok: true, solutions, values, goal });
       return;
     }
