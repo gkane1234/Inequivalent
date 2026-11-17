@@ -1,5 +1,6 @@
 import { initExplainDemo } from "./explain.js";
 import { mountGames } from "./games-panel.js";
+import { formatDifficulty } from "./lib/difficulty.js";
 import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 6;
@@ -118,6 +119,11 @@ function reachedCap(count, maxSolutions) {
   return Number.isFinite(maxSolutions) && count >= maxSolutions;
 }
 
+function joinDifficulty(base, result) {
+  const extra = formatDifficulty(result.difficulty, result.ideaCount);
+  return extra ? `${base} ${extra}` : base;
+}
+
 function callWorker(action, payload, onProgress) {
   const id = ++requestId;
   return new Promise((resolve, reject) => {
@@ -228,9 +234,10 @@ els.runBtn.addEventListener("click", async () => {
         lines.length > 0
           ? lines.join("\n")
           : `No solutions listed for [${values.join(", ")}] → ${goal}`;
-      els.solveMeta.textContent = reachedCap(count, maxSolutions)
+      const base = reachedCap(count, maxSolutions)
         ? `Found ${count} solution(s) (stopped at max ${maxSolutions}).`
         : `Found ${count} solution(s).`;
+      els.solveMeta.textContent = reachedCap(count, maxSolutions) ? base : joinDifficulty(base, result);
     } else {
       const boardMax = Number(els.maxSolutions.value);
       const result = await callWorker("findValues", {
@@ -247,10 +254,11 @@ els.runBtn.addEventListener("click", async () => {
         ...shown.map((s, i) => `${i + 1}. ${s.expression} = ${s.value}`),
       ];
       els.results.textContent = lines.join("\n");
-      els.solveMeta.textContent =
+      const base =
         shown.length < count
           ? `Found ${count} solution(s) for this board; showing ${shown.length}.`
           : `Found ${count} solution(s) for this board.`;
+      els.solveMeta.textContent = joinDifficulty(base, result);
     }
   } catch (err) {
     els.results.textContent = "";
@@ -351,7 +359,10 @@ mountGames({
       maxSolutions,
       dedupeRepeated: true,
     });
-    return result.solutions;
+    const solutions = result.solutions;
+    solutions.difficulty = result.difficulty;
+    solutions.ideaCount = result.ideaCount;
+    return solutions;
   },
 });
 callWorker("init", { force: false }).catch((err) => {

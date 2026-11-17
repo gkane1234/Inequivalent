@@ -118,7 +118,16 @@ async function handleSearch(msg) {
         (p) => post({ ...p, id }),
         { dedupeRepeated }
       );
-      post({ type: "result", id, ok: true, solutions, values, goal });
+      post({
+        type: "result",
+        id,
+        ok: true,
+        solutions,
+        values,
+        goal,
+        difficulty: solutions.difficulty ?? null,
+        ideaCount: solutions.ideaCount ?? 0,
+      });
       return;
     }
 

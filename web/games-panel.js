@@ -1,3 +1,4 @@
+import { formatDifficulty } from "./lib/difficulty.js";
 import { find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
 
 const BANDS = [
@@ -28,8 +29,10 @@ export function mountGames(engine) {
       <h3>24 game</h3>
       <p>
         Four numbers from 1 to 9. The goal is 24, and each number is used once.
-        Difficulty is the number of solutions after deduping repeated numbers:
-        easy has more than 7.5, medium has between 2.5 and 7.5, and hard has fewer than 2.5.
+        The easy, medium, and hard buttons follow the number of solutions after deduping
+        repeated numbers: easy has more than 7.5, medium has between 2.5 and 7.5, and hard
+        has fewer than 2.5. A dealt board also shows an arithmetic difficulty. Lower is easier,
+        and lines that only move a 0 or a 1 count as one idea.
       </p>
       <div class="modes" id="game24Bands" role="group" aria-label="24 game difficulty"></div>
       <div class="actions">
@@ -48,7 +51,8 @@ export function mountGames(engine) {
         hold six, seven and seven cards: two each of the integers from 1 to 10.
         A contestant picks six cards, by a pattern, by how many to take from each row,
         or by how many large numbers and small numbers. This deals six legal cards and a
-        three-digit target those six can make. Each number is used once.
+        three-digit target those six can make. Each number is used once. The status includes
+        the same arithmetic difficulty as the 24 game.
       </p>
       <div class="actions">
         <button type="button" class="primary" id="countdownDeal">New puzzle</button>
@@ -147,7 +151,10 @@ export function mountGames(engine) {
         },
       });
       paintNumbers(els.numbers24, puzzle24.values, "24");
-      els.status24.textContent = `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)}.`;
+      els.status24.textContent = withDifficulty(
+        `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)}.`,
+        puzzle24
+      );
     } catch (err) {
       els.status24.textContent = err.message;
     } finally {
@@ -178,7 +185,10 @@ export function mountGames(engine) {
       });
       paintNumbers(els.numbersCount, puzzleCount.values, String(puzzleCount.goal));
       const small = 6 - puzzleCount.largeCount;
-      els.statusCount.textContent = `${puzzleCount.largeCount} large and ${small} small. Target ${puzzleCount.goal}.`;
+      els.statusCount.textContent = withDifficulty(
+        `${puzzleCount.largeCount} large and ${small} small. Target ${puzzleCount.goal}.`,
+        puzzleCount
+      );
     } catch (err) {
       els.statusCount.textContent = err.message;
     } finally {
@@ -196,6 +206,11 @@ export function mountGames(engine) {
 
   engine.subscribe(refresh);
   refresh();
+}
+
+function withDifficulty(sentence, puzzle) {
+  const extra = formatDifficulty(puzzle.difficulty, puzzle.ideaCount);
+  return extra ? `${sentence} ${extra}` : sentence;
 }
 
 function labelOf(band) {
