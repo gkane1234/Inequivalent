@@ -1,5 +1,6 @@
-import { canonicalDisplay } from "./canonical.js";
+import { canonicalize } from "./canonical.js";
 import { displayExpression } from "./expression.js";
+import { rate } from "./difficulty.js";
 
 const ROUNDING = 9;
 const TOLERANCE = 1e-5;
@@ -22,19 +23,29 @@ export function findAllSolutions(expressionList, values, goal, maxSolutions = 20
   const seen = new Set();
   const total = expressionList.numExpressions;
   const reportEvery = Math.max(1, Math.floor(total / 20));
+  let aborted = false;
 
   for (let i = 0; i < total; i++) {
     const expr = expressionList.get(i);
     const value = expr.evaluateWithValues(values, ROUNDING);
     if (valuesEqual(value, goal)) {
-      const text = dedupe ? canonicalDisplay(expr, values) : displayExpression(expr, values);
+      const scored = dedupe ? canonicalize(expr, values) : expr;
+      const text = displayExpression(scored, values);
       if (!seen.has(text)) {
         seen.add(text);
         solutions.push({
           expression: text,
           value,
+          program: {
+            valueOrder: scored.valueOrder.slice(),
+            operations: scored.operations.slice(),
+            order: scored.order.slice(),
+          },
         });
-        if (Number.isFinite(maxSolutions) && solutions.length >= maxSolutions) break;
+        if (Number.isFinite(maxSolutions) && solutions.length >= maxSolutions) {
+          aborted = true;
+          break;
+        }
       }
     }
     if (onProgress && i % reportEvery === 0) {
@@ -48,6 +59,11 @@ export function findAllSolutions(expressionList, values, goal, maxSolutions = 20
     }
   }
 
+  if (!aborted && solutions.length > 0) {
+    const rating = rate(solutions.map((solution) => solution.program), values);
+    solutions.difficulty = rating.difficulty;
+    solutions.ideaCount = rating.ideaCount;
+  }
   return solutions;
 }
 
@@ -81,7 +97,13 @@ export function findSolvableValues(
     }
     const solutions = findAllSolutions(expressionList, values, goal, smax + 1);
     if (solutions.length >= smin && solutions.length <= smax) {
-      return { values, solutions, attempts: attempt };
+      return {
+        values,
+        solutions,
+        attempts: attempt,
+        difficulty: solutions.difficulty ?? null,
+        ideaCount: solutions.ideaCount ?? 0,
+      };
     }
   }
   throw new Error(`No board found within ${maxAttempts} attempts`);

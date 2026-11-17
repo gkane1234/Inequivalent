@@ -4,6 +4,8 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -217,6 +219,7 @@ public class ComSearchExplorer extends JFrame {
                     : "dedupe off: index order, every labeled hit")
                 + "; Stop keeps results) ---");
 
+        final List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         worker = new SwingWorker<Void, String>() {
             private Solver.SearchStats lastStats = new Solver.SearchStats(0, 0);
             private long elapsedMs;
@@ -229,6 +232,7 @@ public class ComSearchExplorer extends JFrame {
                             if (userStopped.get()) {
                                 return;
                             }
+                            hits.add(solution);
                             int k = solutionCount.incrementAndGet();
                             publish("SOL:" + k + ". " + solution.display()
                                     + " = " + format(solution.getValue()));
@@ -286,6 +290,12 @@ public class ComSearchExplorer extends JFrame {
                 }
                 String prefix = userStopped.get() ? "Stopped. " : "Done. ";
                 String end = prefix + formatStatus(found, checked, elapsedMs);
+                if (!userStopped.get()) {
+                    String difficulty = Difficulty.format(Difficulty.rate(hits, values));
+                    if (!difficulty.isEmpty()) {
+                        end = end + "  " + difficulty;
+                    }
+                }
                 statusLabel.setText(end);
                 appendLine("--- " + end + " ---");
             }

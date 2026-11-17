@@ -91,6 +91,8 @@ self.onmessage = (event) => {
             solutionCount: result.solutions.length,
             checked: result.checked,
             total: result.total,
+            difficulty: result.difficulty,
+            ideaCount: result.ideaCount,
           });
           return;
         }

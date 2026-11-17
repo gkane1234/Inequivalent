@@ -74,6 +74,7 @@ export async function find24Puzzle(solve, band, options = {}) {
     options.onAttempt?.({ attempt, maxAttempts, values, goal: GAME24_GOAL });
     const solutions = await solve(values, GAME24_GOAL, cap);
     if (matchesBand(solutions.length, band)) {
+      const full = await solve(values, GAME24_GOAL, Number.POSITIVE_INFINITY);
       return {
         values,
         goal: GAME24_GOAL,
@@ -81,6 +82,8 @@ export async function find24Puzzle(solve, band, options = {}) {
         band,
         countText: countLabel(solutions.length, band),
         attempts: attempt,
+        difficulty: full.difficulty,
+        ideaCount: full.ideaCount,
       };
     }
   }
@@ -98,12 +101,15 @@ export async function findCountdownPuzzle(solve, options = {}) {
     options.onAttempt?.({ attempt, maxAttempts, values: dealt.values, goal });
     const solutions = await solve(dealt.values, goal, 1);
     if (solutions.length > 0) {
+      const full = await solve(dealt.values, goal, Number.POSITIVE_INFINITY);
       return {
         values: dealt.values,
         largeCount: dealt.largeCount,
         goal,
-        answer: solutions[0],
+        answer: full[0] ?? solutions[0],
         attempts: attempt,
+        difficulty: full.difficulty,
+        ideaCount: full.ideaCount,
       };
     }
   }

@@ -1,4 +1,5 @@
 import { mountGames } from "./games-panel.js";
+import { formatDifficulty } from "./lib/difficulty.js";
 import { loadMarkdown } from "./lib/markdown.js";
 
 const TARGET_N = 8;
@@ -95,6 +96,11 @@ function parseMaxSolutionsCap() {
 
 function reachedCap(count, maxSolutions) {
   return Number.isFinite(maxSolutions) && count >= maxSolutions;
+}
+
+function joinDifficulty(base, result) {
+  const extra = formatDifficulty(result.difficulty, result.ideaCount);
+  return extra ? `${base} ${extra}` : base;
 }
 
 function formatShownValue(value) {
@@ -226,9 +232,10 @@ function finishSpecific(result, values, goal, maxSolutions, prefix) {
     els.results.textContent = `No solutions listed for [${values.join(", ")}] → ${goal}`;
   }
   const lead = prefix ? `${prefix}: ` : "";
-  els.solveMeta.textContent = capped
+  const base = capped
     ? `${lead}Found ${result.solutions.length} solution(s) (stopped at max ${maxSolutions}).`
     : `${lead}Found ${result.solutions.length} solution(s).`;
+  els.solveMeta.textContent = capped ? base : joinDifficulty(base, result);
 }
 
 els.modeSpecific.addEventListener("click", () => {
@@ -292,10 +299,11 @@ els.runBtn.addEventListener("click", async () => {
       const lines = [`Values: [${result.values.join(", ")}]  (${result.attempts} attempts)`, ...solutionLines(shown)];
       els.results.textContent = lines.join("\n");
       const count = result.solutionCount;
-      els.solveMeta.textContent =
+      const base =
         count > shown.length
           ? `Found ${count} solution(s) for this board; showing ${shown.length}.`
           : `Found ${count} solution(s) for this board.`;
+      els.solveMeta.textContent = joinDifficulty(base, result);
     }
   } catch (err) {
     if (err.stopped) {
@@ -376,7 +384,12 @@ function mountComSearchGames() {
     const entry = pendingGames.get(msg.id);
     if (!entry) return;
     pendingGames.delete(msg.id);
-    if (msg.ok) entry.resolve(msg.solutions);
+    if (msg.ok) {
+      const solutions = msg.solutions;
+      solutions.difficulty = msg.difficulty;
+      solutions.ideaCount = msg.ideaCount;
+      entry.resolve(solutions);
+    }
     else entry.reject(new Error(msg.error || "Worker error"));
   };
 

@@ -1,4 +1,5 @@
 import { expectedCount } from "./counter.js";
+import { rate } from "./difficulty.js";
 
 /**
  * JavaScript port of ComSearchGenerator.search (serial).
@@ -308,6 +309,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
   const solutions = [];
   let checked = 0;
   let cancelled = false;
+  let aborted = false;
   const reportEvery = n >= 7 ? 20000 : n >= 6 ? 5000 : 1000;
 
   const leafNodes = values.map((value, i) => leaf(i, value));
@@ -320,9 +322,14 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
   }
 
   function consider(raw, materialize) {
-    if (isCancelled()) return;
+    if (isCancelled()) {
+      aborted = true;
+      cancelled = true;
+      return;
+    }
     if (solutions.length >= limit) {
       cancelled = true;
+      aborted = true;
       return;
     }
     checked++;
@@ -330,17 +337,19 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
     const value = round9(raw);
     if (valuesEqual(value, goal)) {
       const tree = materialize();
-      const expression = dedupe
-        ? formatTree(reorderCommutative(tree, values), values)
-        : formatTree(tree, values);
+      const kept = dedupe ? reorderCommutative(tree, values) : tree;
+      const expression = formatTree(kept, values);
       if (seen) {
         if (seen.has(expression)) return;
         seen.add(expression);
       }
-      const solution = { expression, value };
+      const solution = { expression, value, program: toProgram(kept) };
       solutions.push(solution);
       if (onSolution) onSolution(solution);
-      if (solutions.length >= limit) cancelled = true;
+      if (solutions.length >= limit) {
+        cancelled = true;
+        aborted = true;
+      }
     }
   }
 
@@ -489,5 +498,32 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
   }
 
   report(true);
-  return { solutions, checked, total };
+  const stoppedEarly = aborted || cancelled || Boolean(shouldStop && shouldStop());
+  const rating = !stoppedEarly && solutions.length > 0 ? rate(solutions.map((solution) => solution.program), values) : null;
+  return {
+    solutions,
+    checked,
+    total,
+    difficulty: rating ? rating.difficulty : null,
+    ideaCount: rating ? rating.ideaCount : 0,
+  };
+}
+
+function toProgram(node) {
+  const valueOrder = [];
+  const operations = [];
+  const order = [];
+  function write(current) {
+    if (current.leaf) {
+      valueOrder.push(current.var);
+      order.push(true);
+      return;
+    }
+    write(current.left);
+    write(current.right);
+    operations.push(current.op);
+    order.push(false);
+  }
+  write(node);
+  return { valueOrder, operations, order };
 }
