@@ -12,11 +12,11 @@ function rpn(vars, ops, order) {
   return { valueOrder: vars, operations: ops, order };
 }
 
-test("repeated cards scale the deal and leave different cards alone", () => {
-  assert.equal(repeatFactor([9, 8, 7, 1]), 1);
-  assert.ok(Math.abs(repeatFactor([6, 6, 6, 6]) - 5 / 4 / 4) < 1e-12);
-  assert.ok(Math.abs(repeatFactor([8, 3, 3, 3]) - (1 + 4 / 3) / 4) < 1e-12);
-  assert.ok(Math.abs(repeatFactor([7, 3, 7, 3]) - (3 / 2 + 3 / 2) / 4) < 1e-12);
+test("four different cards multiply by 4, and repeats weigh 1 + 1/k", () => {
+  assert.equal(repeatFactor([9, 8, 7, 1]), 4);
+  assert.ok(Math.abs(repeatFactor([6, 6, 6, 6]) - 5 / 4) < 1e-12);
+  assert.ok(Math.abs(repeatFactor([8, 3, 3, 3]) - (1 + 4 / 3)) < 1e-12);
+  assert.ok(Math.abs(repeatFactor([7, 3, 7, 3]) - (3 / 2 + 3 / 2)) < 1e-12);
 });
 
 test("single steps follow the examples", () => {
@@ -52,15 +52,15 @@ test("a zero-cost line floors at 1, and a repeated line counts once", () => {
   const zero = rpn([0, 1], [ADD], [true, true, false]);
   const zeros = [0, 0];
   assert.equal(solutionCost(zero, zeros), 0);
-  assert.equal(rate([zero], zeros).difficulty, 0.75);
+  assert.equal(rate([zero], zeros).difficulty, 1.5);
   const product = rpn([0, 1], [MUL], [true, true, false]);
-  assert.equal(rate([zero, product], zeros).difficulty, 0.375);
+  assert.equal(rate([zero, product], zeros).difficulty, 0.75);
 
   const six = rpn([0, 1], [ADD], [true, true, false]);
   const rated = rate([six, six], [6, 1]);
   assert.equal(rated.ideaCount, 1);
   assert.equal(rated.lineCount, 2);
-  assert.ok(Math.abs(rated.difficulty - solutionCost(six, [6, 1])) < 1e-9);
+  assert.ok(Math.abs(rated.difficulty - solutionCost(six, [6, 1]) * 2) < 1e-9);
 });
 
 test("solved deals keep the spare-1 collapse and the agreed order", () => {
@@ -84,7 +84,7 @@ test("solved deals keep the spare-1 collapse and the agreed order", () => {
   assert.ok(sixes.difficulty < spare.difficulty);
   assert.ok(sixes.difficulty < ordinary.difficulty);
   assert.ok(sixes.difficulty < fraction.difficulty);
-  assert.ok(Math.abs(fraction.difficulty - (26.606064339 * 7) / 12) < 0.05);
+  assert.ok(Math.abs(fraction.difficulty - (26.606064339 * 7) / 3) < 0.05);
   const triple = solveComSearch([3, 3, 3, 8], 24, Infinity, undefined, undefined, undefined, {
     dedupeRepeated: true,
   });

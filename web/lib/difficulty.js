@@ -75,7 +75,7 @@ export function rate(lines, values) {
 
 /**
  * A value seen once weighs 1. A value seen k times weighs 1 + 1/k.
- * Divide by the number of cards so an all-different hand stays at 1.
+ * The factor is the sum of those weights. Four different cards give 4.
  */
 export function repeatFactor(values) {
   const n = values.length;
@@ -90,7 +90,7 @@ export function repeatFactor(values) {
       count = 1;
     }
   }
-  return weight / n;
+  return weight;
 }
 
 function sameCard(left, right) {

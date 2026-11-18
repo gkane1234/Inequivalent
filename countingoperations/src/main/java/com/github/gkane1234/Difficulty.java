@@ -22,9 +22,8 @@ import java.util.Map;
  * step costs are the unit. There is no anchor.
  *
  * <p>Repeated dealt numbers scale the finished deal. A value seen once weighs
- * 1. A value seen {@code k} times weighs {@code 1 + 1/k}. The scale is that
- * sum divided by how many cards were dealt, so a hand of all different
- * numbers is unchanged.
+ * 1. A value seen {@code k} times weighs {@code 1 + 1/k}. The scale is the
+ * sum of those weights. Four different cards multiply by 4.
  */
 public final class Difficulty {
     public static final double LAMBDA = 2.5;
@@ -107,9 +106,9 @@ public final class Difficulty {
     }
 
     /**
-     * How much repeated cards ease the deal. Four different numbers give 1.
-     * Four of a kind give {@code (5/4) / 4}. A triple and a singleton give
-     * {@code (1 + 4/3) / 4}. Two pairs give {@code (3/2 + 3/2) / 4}.
+     * How much repeated cards ease the deal. Four different numbers give 4.
+     * Four of a kind give {@code 5/4}. A triple and a singleton give
+     * {@code 1 + 4/3}. Two pairs give {@code 3/2 + 3/2}.
      */
     public static double repeatFactor(double[] values) {
         int n = values.length;
@@ -129,7 +128,7 @@ public final class Difficulty {
                 count = 1;
             }
         }
-        return weight / n;
+        return weight;
     }
 
     private static boolean sameCard(double left, double right) {
