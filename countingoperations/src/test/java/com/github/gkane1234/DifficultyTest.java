@@ -124,18 +124,19 @@ public class DifficultyTest {
         double[] zeros = {0, 0};
         Assert.assertEquals(0.0, Difficulty.solutionCost(zero, zeros), TOLERANCE);
         Difficulty.Rating one = Difficulty.rate(Arrays.asList(zero), zeros);
-        Assert.assertEquals(1.0, one.difficulty, TOLERANCE);
+        Assert.assertEquals(1.5, one.difficulty, TOLERANCE);
         Assert.assertEquals(1, one.ideas);
 
         Expression product = rpn(new int[] {0, 1}, new int[] {MUL}, bits(true, true, false));
         Difficulty.Rating both = Difficulty.rate(Arrays.asList(zero, product), zeros);
-        Assert.assertEquals(0.5, both.difficulty, TOLERANCE);
+        Assert.assertEquals(0.75, both.difficulty, TOLERANCE);
         Assert.assertEquals(2, both.ideas);
 
         Expression sixPlusOne = rpn(new int[] {0, 1}, new int[] {ADD}, bits(true, true, false));
         double[] sixOne = {6, 1};
         Difficulty.Rating repeated = Difficulty.rate(Arrays.asList(sixPlusOne, sixPlusOne), sixOne);
-        Assert.assertEquals(Difficulty.solutionDifficulty(sixPlusOne, sixOne), repeated.difficulty, TOLERANCE);
+        Assert.assertEquals(
+                Difficulty.solutionDifficulty(sixPlusOne, sixOne) * 2.0, repeated.difficulty, TOLERANCE);
         Assert.assertEquals(1, repeated.ideas);
         Assert.assertEquals(2, repeated.lines);
 
@@ -143,29 +144,42 @@ public class DifficultyTest {
     }
 
     @Test
-    public void dealsUseOneIdeaAndStayOrdered() {
-        Difficulty.Rating spareOne = rateDeal(new double[] {9, 8, 7, 1}, 24);
-        Difficulty.Rating sixes = rateDeal(new double[] {6, 6, 6, 6}, 24);
-        Difficulty.Rating ordinary = rateDeal(new double[] {2, 4, 7, 10}, 24);
-        Difficulty.Rating fraction = rateDeal(new double[] {5, 5, 5, 1}, 24);
+    public void numbersUseOneIdeaAndStayOrdered() {
+        Difficulty.Rating spareOne = rateNumbers(new double[] {9, 8, 7, 1}, 24);
+        Difficulty.Rating sixes = rateNumbers(new double[] {6, 6, 6, 6}, 24);
+        Difficulty.Rating ordinary = rateNumbers(new double[] {2, 4, 7, 10}, 24);
+        Difficulty.Rating fraction = rateNumbers(new double[] {5, 5, 5, 1}, 24);
 
         Assert.assertEquals(2, spareOne.ideas);
         Assert.assertEquals(15, spareOne.lines);
-        Assert.assertTrue(spareOne.difficulty < sixes.difficulty);
-        Assert.assertTrue(spareOne.difficulty > 4.0);
-        Assert.assertTrue(spareOne.difficulty < 8.0);
+        Assert.assertTrue(sixes.difficulty < spareOne.difficulty);
+        Assert.assertTrue(spareOne.difficulty > 16.0);
+        Assert.assertTrue(spareOne.difficulty < 32.0);
 
         Assert.assertEquals(2, sixes.ideas);
         Assert.assertEquals(2, sixes.lines);
         Assert.assertEquals(4, ordinary.ideas);
         Assert.assertEquals(ordinary.lines, ordinary.ideas);
-        Assert.assertTrue(ordinary.difficulty < sixes.difficulty);
+        Assert.assertTrue(sixes.difficulty < ordinary.difficulty);
         Assert.assertEquals(1, fraction.ideas);
-        Assert.assertEquals(26.6060643390, fraction.difficulty, 0.05);
+        Assert.assertEquals(26.6060643390 * 7.0 / 3.0, fraction.difficulty, 0.05);
         Assert.assertTrue(sixes.difficulty < fraction.difficulty);
+
+        Difficulty.Rating triple = rateNumbers(new double[] {3, 3, 3, 8}, 24);
+        Difficulty.Rating pairs = rateNumbers(new double[] {7, 7, 3, 3}, 24);
+        Assert.assertTrue(triple.difficulty < pairs.difficulty);
     }
 
-    private static Difficulty.Rating rateDeal(double[] values, double goal) {
+    @Test
+    public void repeatWeightsMatchThePiles() {
+        Assert.assertEquals(4.0, Difficulty.repeatFactor(new double[] {9, 8, 7, 1}), TOLERANCE);
+        Assert.assertEquals(5.0 / 4.0, Difficulty.repeatFactor(new double[] {6, 6, 6, 6}), TOLERANCE);
+        Assert.assertEquals(1.0 + 4.0 / 3.0, Difficulty.repeatFactor(new double[] {8, 3, 3, 3}), TOLERANCE);
+        Assert.assertEquals(1.5 + 1.5, Difficulty.repeatFactor(new double[] {7, 3, 7, 3}), TOLERANCE);
+        Assert.assertEquals(1.0, Difficulty.repeatFactor(new double[] {1}), TOLERANCE);
+    }
+
+    private static Difficulty.Rating rateNumbers(double[] values, double goal) {
         List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         new Solver(values.length).findSolutionsStreaming(
                 values, goal, Integer.MAX_VALUE, hits::add, null, true);

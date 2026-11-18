@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Groups solved lines that differ only by where a 0 or a 1 is parked.
  *
- * <p>A value that is 0 or 1, whether it was dealt or computed, keeps the
+ * <p>A value that is 0 or 1, whether it is an input or computed, keeps the
  * subtree that produced it. Multiplying or dividing by 1, and adding or
  * subtracting 0, drop that attachment. Using the 0 or 1 for anything else
  * bakes the subtree into the core. The signature is that core plus the
