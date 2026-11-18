@@ -1,7 +1,10 @@
 package com.github.gkane1234;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -21,7 +24,7 @@ import java.util.Map;
  * step costs are the unit. There is no anchor.
  */
 public final class Difficulty {
-    public static final double LAMBDA = 2.5;
+    public static final double LAMBDA = 1.5;
     /** Weight on the log-size of a dealt card or of a step's result. */
     public static final double FAMILIAR_WEIGHT = 0.5;
     public static final double MIN_SOLUTION_DIFFICULTY = 1.0;
@@ -33,36 +36,95 @@ public final class Difficulty {
 
     /** Raw step-cost total. Infinite when a step divides by zero. */
     public static double solutionCost(Expression expression, double[] values) {
-        Item[] stack = new Item[expression.order.length];
-        int sp = 0;
-        int valuesPointer = 0;
-        int operationsPointer = 0;
-        double total = 0.0;
-        for (boolean isNumber : expression.order) {
-            if (isNumber) {
-                int varIndex = expression.valueOrder[valuesPointer++] & 0xff;
-                stack[sp++] = Item.leaf(values[varIndex]);
+        return walk(expression, values, false).cost;
+    }
+
+    /** One solved line, with the cost of each step. */
+    public static LineTrace trace(Expression expression, double[] values) {
+        Walked walked = walk(expression, values, true);
+        String text = new EvaluatedExpression(expression, values, 0).display();
+        double difficulty = walked.cost == Double.POSITIVE_INFINITY
+                ? Double.POSITIVE_INFINITY
+                : Math.max(MIN_SOLUTION_DIFFICULTY, walked.cost);
+        return new LineTrace(walked.steps, walked.cost, difficulty, text);
+    }
+
+    /**
+     * The cheapest line of each identity key, with that line's steps.
+     * The rating matches {@link #rate}.
+     */
+    public static DealTrace explain(Iterable<? extends Expression> lines, double[] values) {
+        Map<String, IdeaBuilder> best = new LinkedHashMap<String, IdeaBuilder>();
+        int count = 0;
+        for (Expression line : lines) {
+            count++;
+            String key = IdentityDedupe.signature(line, values);
+            double difficulty = solutionDifficulty(line, values);
+            IdeaBuilder idea = best.get(key);
+            if (idea == null) {
+                idea = new IdeaBuilder();
+                idea.line = line;
+                idea.difficulty = difficulty;
+                idea.lines = 1;
+                best.put(key, idea);
             } else {
-                Item right = stack[--sp];
-                Item left = stack[--sp];
-                int op = expression.operations[operationsPointer++] & 0xff;
-                if (left.value == null || right.value == null) {
-                    return Double.POSITIVE_INFINITY;
+                idea.lines++;
+                if (difficulty < idea.difficulty) {
+                    idea.line = line;
+                    idea.difficulty = difficulty;
                 }
-                Rat result = apply(op, left.value, right.value);
-                if (result == null) {
-                    return Double.POSITIVE_INFINITY;
-                }
-                total += numberCost(left.value, !left.computed)
-                        + numberCost(right.value, !right.computed)
-                        + numberCost(result, true);
-                stack[sp++] = Item.computed(result);
             }
         }
-        if (sp != 1) {
-            throw new IllegalStateException("Invalid expression");
+        List<IdeaTrace> ideas = new ArrayList<IdeaTrace>();
+        for (IdeaBuilder idea : best.values()) {
+            ideas.add(new IdeaTrace(trace(idea.line, values), idea.lines));
         }
-        return total;
+        ideas.sort((a, b) -> {
+            int byScore = Double.compare(a.line.difficulty, b.line.difficulty);
+            if (byScore != 0) {
+                return byScore;
+            }
+            return a.line.text.compareTo(b.line.text);
+        });
+        if (count == 0) {
+            return new DealTrace(ideas, new Rating(Double.NaN, 0, 0));
+        }
+        double reciprocal = 0.0;
+        for (IdeaTrace idea : ideas) {
+            reciprocal += 1.0 / idea.line.difficulty;
+        }
+        double deal = reciprocal == 0.0 ? Double.POSITIVE_INFINITY : 1.0 / reciprocal;
+        return new DealTrace(ideas, new Rating(deal, ideas.size(), count));
+    }
+
+    /** How the deal score is assembled, and what each step in each idea costs. */
+    public static String formatExplain(DealTrace deal) {
+        StringBuilder text = new StringBuilder();
+        if (deal.rating.ideas <= 0 || Double.isNaN(deal.rating.difficulty)) {
+            text.append("No solved line, so this deal has no difficulty.\n");
+            return text.toString();
+        }
+        text.append(format(deal.rating)).append('\n');
+        text.append(parallelSum(deal)).append('\n');
+        for (int i = 0; i < deal.ideas.size(); i++) {
+            IdeaTrace idea = deal.ideas.get(i);
+            text.append('\n');
+            text.append("Idea ").append(i + 1).append(" of ").append(deal.ideas.size());
+            text.append(". Score ").append(num(idea.line.difficulty));
+            text.append(" from ").append(idea.lines).append(idea.lines == 1 ? " line." : " lines.");
+            text.append(" The cheapest line is shown.\n");
+            text.append(idea.line.text).append('\n');
+            if (idea.line.cost == Double.POSITIVE_INFINITY) {
+                text.append("A step divides by zero, so this line has no finite cost.\n");
+            } else {
+                text.append("line cost ").append(num(idea.line.cost));
+                text.append(", score max(1, cost) = ").append(num(idea.line.difficulty)).append('\n');
+            }
+            for (Step step : idea.line.steps) {
+                text.append(formatStep(step));
+            }
+        }
+        return text.toString();
     }
 
     /** {@code max(1, solutionCost)}. */
@@ -103,6 +165,129 @@ public final class Difficulty {
         }
         String ideas = rating.ideas == 1 ? "1 idea" : rating.ideas + " ideas";
         return String.format(Locale.US, "Difficulty %.2f from %s. Lower is easier.", rating.difficulty, ideas);
+    }
+
+    private static Walked walk(Expression expression, double[] values, boolean record) {
+        Item[] stack = new Item[expression.order.length];
+        int sp = 0;
+        int valuesPointer = 0;
+        int operationsPointer = 0;
+        double total = 0.0;
+        List<Step> steps = record ? new ArrayList<Step>() : null;
+        for (boolean isNumber : expression.order) {
+            if (isNumber) {
+                int varIndex = expression.valueOrder[valuesPointer++] & 0xff;
+                stack[sp++] = Item.leaf(values[varIndex]);
+            } else {
+                Item right = stack[--sp];
+                Item left = stack[--sp];
+                int op = expression.operations[operationsPointer++] & 0xff;
+                if (left.value == null || right.value == null) {
+                    return Walked.infinite(steps);
+                }
+                Rat result = apply(op, left.value, right.value);
+                if (result == null) {
+                    return Walked.infinite(steps);
+                }
+                boolean leftFamiliar = !left.computed;
+                boolean rightFamiliar = !right.computed;
+                double leftCost = numberCost(left.value, leftFamiliar);
+                double rightCost = numberCost(right.value, rightFamiliar);
+                double resultCost = numberCost(result, true);
+                double stepCost = leftCost + rightCost + resultCost;
+                total += stepCost;
+                String shown = show(left) + symbol(op) + show(right);
+                if (record) {
+                    steps.add(new Step(steps.size() + 1, symbol(op), shown, result.text(),
+                            part("left", left.value, leftFamiliar, leftCost),
+                            part("right", right.value, rightFamiliar, rightCost),
+                            part("result", result, true, resultCost),
+                            stepCost));
+                }
+                stack[sp++] = Item.computed(result, shown);
+            }
+        }
+        if (sp != 1) {
+            throw new IllegalStateException("Invalid expression");
+        }
+        return new Walked(total, steps == null ? new ArrayList<Step>() : steps);
+    }
+
+    private static String parallelSum(DealTrace deal) {
+        StringBuilder terms = new StringBuilder();
+        StringBuilder parts = new StringBuilder();
+        double reciprocal = 0.0;
+        for (int i = 0; i < deal.ideas.size(); i++) {
+            double score = deal.ideas.get(i).line.difficulty;
+            double share = 1.0 / score;
+            reciprocal += share;
+            if (i > 0) {
+                terms.append(" + ");
+                parts.append(" + ");
+            }
+            terms.append("1/").append(num(score));
+            parts.append(num(share));
+        }
+        return "1/D = " + terms + " = " + parts + " = " + num(reciprocal)
+                + "\nD = " + num(deal.rating.difficulty);
+    }
+
+    private static String formatStep(Step step) {
+        StringBuilder text = new StringBuilder();
+        text.append("  ").append(step.index).append(". ").append(step.expression);
+        text.append(" = ").append(step.resultText);
+        text.append("    step ").append(num(step.cost)).append('\n');
+        text.append(formatPart(step.left));
+        text.append(formatPart(step.right));
+        text.append(formatPart(step.result));
+        return text.toString();
+    }
+
+    private static String formatPart(Part part) {
+        String kind = "result".equals(part.role) ? "this step" : (part.familiar ? "card" : "made earlier");
+        String weight = part.familiar ? "half weight" : "full weight";
+        return String.format(Locale.US, "     %-6s %-8s %-12s %-11s %s = %s%n",
+                part.role, part.valueText, kind, weight, formula(part), num(part.cost));
+    }
+
+    private static String formula(Part part) {
+        if (part.zero) {
+            return "0";
+        }
+        String weight = part.familiar ? "0.5" : "1";
+        String size = weight + "*ln(1+" + part.numerator.abs() + ")";
+        if (BigInteger.ONE.equals(part.denominator)) {
+            return size;
+        }
+        return size + " + " + trim(LAMBDA) + "*ln(" + part.denominator + ")";
+    }
+
+    private static String show(Item item) {
+        return item.computed ? "(" + item.text + ")" : item.text;
+    }
+
+    private static char symbol(int op) {
+        return Operation.getOperations()[op].getName();
+    }
+
+    private static Part part(String role, Rat value, boolean familiar, double cost) {
+        return new Part(role, value.text(), familiar, value.p.signum() == 0,
+                value.p, value.q, cost);
+    }
+
+    private static String num(double value) {
+        if (value == Double.POSITIVE_INFINITY) {
+            return "infinity";
+        }
+        return String.format(Locale.US, "%.4f", value);
+    }
+
+    private static String trim(double value) {
+        String text = String.format(Locale.US, "%.4f", value);
+        while (text.contains(".") && (text.endsWith("0") || text.endsWith("."))) {
+            text = text.substring(0, text.length() - 1);
+        }
+        return text;
     }
 
     private static double numberCost(Rat value, boolean familiar) {
@@ -150,6 +335,105 @@ public final class Difficulty {
         throw new IllegalArgumentException("unknown op " + op);
     }
 
+    public static final class Part {
+        public final String role;
+        public final String valueText;
+        public final boolean familiar;
+        public final boolean zero;
+        public final BigInteger numerator;
+        public final BigInteger denominator;
+        public final double cost;
+
+        Part(String role, String valueText, boolean familiar, boolean zero,
+                BigInteger numerator, BigInteger denominator, double cost) {
+            this.role = role;
+            this.valueText = valueText;
+            this.familiar = familiar;
+            this.zero = zero;
+            this.numerator = numerator;
+            this.denominator = denominator;
+            this.cost = cost;
+        }
+    }
+
+    public static final class Step {
+        public final int index;
+        public final char symbol;
+        public final String expression;
+        public final String resultText;
+        public final Part left;
+        public final Part right;
+        public final Part result;
+        public final double cost;
+
+        Step(int index, char symbol, String expression, String resultText,
+                Part left, Part right, Part result, double cost) {
+            this.index = index;
+            this.symbol = symbol;
+            this.expression = expression;
+            this.resultText = resultText;
+            this.left = left;
+            this.right = right;
+            this.result = result;
+            this.cost = cost;
+        }
+    }
+
+    public static final class LineTrace {
+        public final List<Step> steps;
+        public final double cost;
+        public final double difficulty;
+        public final String text;
+
+        LineTrace(List<Step> steps, double cost, double difficulty, String text) {
+            this.steps = steps;
+            this.cost = cost;
+            this.difficulty = difficulty;
+            this.text = text;
+        }
+    }
+
+    public static final class IdeaTrace {
+        public final LineTrace line;
+        public final int lines;
+
+        IdeaTrace(LineTrace line, int lines) {
+            this.line = line;
+            this.lines = lines;
+        }
+    }
+
+    public static final class DealTrace {
+        public final List<IdeaTrace> ideas;
+        public final Rating rating;
+
+        DealTrace(List<IdeaTrace> ideas, Rating rating) {
+            this.ideas = ideas;
+            this.rating = rating;
+        }
+    }
+
+    private static final class Walked {
+        final double cost;
+        final List<Step> steps;
+
+        Walked(double cost, List<Step> steps) {
+            this.cost = cost;
+            this.steps = steps;
+        }
+
+        static Walked infinite(List<Step> steps) {
+            return new Walked(Double.POSITIVE_INFINITY,
+                    steps == null ? new ArrayList<Step>() : steps);
+        }
+    }
+
+    private static final class IdeaBuilder {
+        Expression line;
+        double difficulty;
+        int lines;
+    }
+
     public static final class Rating {
         public final double difficulty;
         public final int ideas;
@@ -165,18 +449,21 @@ public final class Difficulty {
     private static final class Item {
         final Rat value;
         final boolean computed;
+        final String text;
 
-        private Item(Rat value, boolean computed) {
+        private Item(Rat value, boolean computed, String text) {
             this.value = value;
             this.computed = computed;
+            this.text = text;
         }
 
         static Item leaf(double number) {
-            return new Item(Rat.fromDouble(number), false);
+            Rat value = Rat.fromDouble(number);
+            return new Item(value, false, value == null ? "?" : value.text());
         }
 
-        static Item computed(Rat value) {
-            return new Item(value, true);
+        static Item computed(Rat value, String text) {
+            return new Item(value, true, text);
         }
     }
 
@@ -187,6 +474,13 @@ public final class Difficulty {
         private Rat(BigInteger p, BigInteger q) {
             this.p = p;
             this.q = q;
+        }
+
+        String text() {
+            if (BigInteger.ONE.equals(q)) {
+                return p.toString();
+            }
+            return p + "/" + q;
         }
 
         static Rat fromDouble(double number) {

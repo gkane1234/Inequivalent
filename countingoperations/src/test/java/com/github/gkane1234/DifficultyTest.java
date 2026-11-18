@@ -61,6 +61,64 @@ public class DifficultyTest {
     }
 
     @Test
+    public void traceSplitsAStepAndAReusedValue() {
+        Expression product = rpn(new int[] {0, 1}, new int[] {MUL}, bits(true, true, false));
+        double[] eightThree = {8, 3};
+        Difficulty.LineTrace once = Difficulty.trace(product, eightThree);
+        Assert.assertEquals(1, once.steps.size());
+        Difficulty.Step step = once.steps.get(0);
+        Assert.assertEquals('*', step.symbol);
+        Assert.assertTrue(step.left.familiar);
+        Assert.assertTrue(step.right.familiar);
+        Assert.assertTrue(step.result.familiar);
+        Assert.assertEquals(step.left.cost + step.right.cost + step.result.cost, step.cost, 0.0);
+        Assert.assertEquals(Difficulty.solutionCost(product, eightThree), step.cost, TOLERANCE);
+        Assert.assertEquals(3.4011973817, step.cost, TOLERANCE);
+
+        Expression reused = rpn(new int[] {0, 1, 2}, new int[] {MUL, MUL},
+                bits(true, true, false, true, false));
+        double[] eightThreeThree = {8, 3, 3};
+        Difficulty.LineTrace twice = Difficulty.trace(reused, eightThreeThree);
+        Assert.assertEquals(2, twice.steps.size());
+        Assert.assertFalse(twice.steps.get(1).left.familiar);
+        Assert.assertTrue(twice.steps.get(1).right.familiar);
+        double sum = 0.0;
+        for (Difficulty.Step traced : twice.steps) {
+            sum += traced.cost;
+        }
+        Assert.assertEquals(Difficulty.solutionCost(reused, eightThreeThree), sum, 0.0);
+    }
+
+    @Test
+    public void explainMatchesTheDealRating() {
+        double[] values = {5, 5, 5, 1};
+        List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
+        new Solver(4, 1).findSolutionsStreaming(
+                values, 24, Integer.MAX_VALUE, hits::add, null, true);
+        Difficulty.DealTrace deal = Difficulty.explain(hits, values);
+        Difficulty.Rating rating = Difficulty.rate(hits, values);
+        Assert.assertEquals(rating.difficulty, deal.rating.difficulty, 1e-9);
+        Assert.assertEquals(rating.ideas, deal.rating.ideas);
+        Assert.assertEquals(rating.lines, deal.rating.lines);
+        String text = Difficulty.formatExplain(deal);
+        Assert.assertTrue(text.contains("1/D"));
+        Assert.assertTrue(text.contains("half weight"));
+        Assert.assertTrue(text.contains("step"));
+        boolean foundFraction = false;
+        for (Difficulty.IdeaTrace idea : deal.ideas) {
+            if (Math.abs(idea.line.cost - 26.6060643390) < 0.05) {
+                foundFraction = true;
+            }
+            double sum = 0.0;
+            for (Difficulty.Step step : idea.line.steps) {
+                sum += step.cost;
+            }
+            Assert.assertEquals(idea.line.cost, sum, 1e-9);
+        }
+        Assert.assertTrue(foundFraction);
+    }
+
+    @Test
     public void floorAndParallelSum() {
         Expression zero = rpn(new int[] {0, 1}, new int[] {ADD}, bits(true, true, false));
         double[] zeros = {0, 0};
