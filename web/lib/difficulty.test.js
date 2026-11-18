@@ -12,7 +12,7 @@ function rpn(vars, ops, order) {
   return { valueOrder: vars, operations: ops, order };
 }
 
-test("four different cards multiply by 4, and repeats weigh 1 + 1/k", () => {
+test("four different numbers multiply by 4, and repeats weigh 1 + 1/k", () => {
   assert.equal(repeatFactor([9, 8, 7, 1]), 4);
   assert.ok(Math.abs(repeatFactor([6, 6, 6, 6]) - 5 / 4) < 1e-12);
   assert.ok(Math.abs(repeatFactor([8, 3, 3, 3]) - (1 + 4 / 3)) < 1e-12);
@@ -63,7 +63,7 @@ test("a zero-cost line floors at 1, and a repeated line counts once", () => {
   assert.ok(Math.abs(rated.difficulty - solutionCost(six, [6, 1]) * 2) < 1e-9);
 });
 
-test("solved deals keep the spare-1 collapse and the agreed order", () => {
+test("solved numbers keep the spare-1 collapse and the agreed order", () => {
   const spare = solveComSearch([9, 8, 7, 1], 24, Infinity, undefined, undefined, undefined, {
     dedupeRepeated: true,
   });

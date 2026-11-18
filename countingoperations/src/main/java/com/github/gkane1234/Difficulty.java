@@ -7,27 +7,27 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Difficulty of one solved line, and of a deal.
+ * Difficulty of one solved line, and of a list of numbers with a goal.
  *
  * <p>A line is the sum of its step costs, and at least 1. Lines that share an
  * {@link IdentityDedupe} key are one idea, and the idea keeps its cheapest
- * line. The deal is the parallel sum of those ideas, so another idea always
- * makes the deal easier than the easiest idea alone. No solved line leaves
- * the deal undefined.
+ * line. The difficulty is the parallel sum of those ideas, so another idea
+ * always makes it easier than the easiest idea alone. No solved line leaves
+ * the difficulty undefined.
  *
  * <p>A number is a reduced fraction {@code p/q}. Its size is {@code ln(1+|p|)},
- * and 0 has size 0. A denominator adds {@code λ ln(q)} at full weight. Dealt
- * cards and the result of a step use half weight on the log-size. A value
+ * and 0 has size 0. A denominator adds {@code λ ln(q)} at full weight. Input
+ * numbers and the result of a step use half weight on the log-size. A value
  * produced by an earlier step uses full weight when it is used again. The
  * step costs are the unit. There is no anchor.
  *
- * <p>Repeated dealt numbers scale the finished deal. A value seen once weighs
+ * <p>Repeated numbers scale the finished difficulty. A value seen once weighs
  * 1. A value seen {@code k} times weighs {@code 1 + 1/k}. The scale is the
- * sum of those weights. Four different cards multiply by 4.
+ * sum of those weights. Four different numbers multiply by 4.
  */
 public final class Difficulty {
     public static final double LAMBDA = 2.5;
-    /** Weight on the log-size of a dealt card or of a step's result. */
+    /** Weight on the log-size of an input number or of a step's result. */
     public static final double FAMILIAR_WEIGHT = 0.5;
     public static final double MIN_SOLUTION_DIFFICULTY = 1.0;
 
@@ -98,17 +98,18 @@ public final class Difficulty {
         for (double difficulty : best.values()) {
             reciprocal += 1.0 / difficulty;
         }
-        double deal = reciprocal == 0.0 ? Double.POSITIVE_INFINITY : 1.0 / reciprocal;
-        if (Double.isFinite(deal)) {
-            deal *= repeatFactor(values);
+        double difficulty = reciprocal == 0.0 ? Double.POSITIVE_INFINITY : 1.0 / reciprocal;
+        if (Double.isFinite(difficulty)) {
+            difficulty *= repeatFactor(values);
         }
-        return new Rating(deal, best.size(), count);
+        return new Rating(difficulty, best.size(), count);
     }
 
     /**
-     * How much repeated cards ease the deal. Four different numbers give 4.
-     * Four of a kind give {@code 5/4}. A triple and a singleton give
-     * {@code 1 + 4/3}. Two pairs give {@code 3/2 + 3/2}.
+     * How much repeated numbers lower the difficulty. Four different numbers
+     * give 4. Four copies of one number give {@code 5/4}. Three copies and
+     * one other number give {@code 1 + 4/3}. Two groups of two give
+     * {@code 3/2 + 3/2}.
      */
     public static double repeatFactor(double[] values) {
         int n = values.length;
@@ -121,7 +122,7 @@ public final class Difficulty {
         double weight = 0.0;
         int count = 1;
         for (int i = 1; i <= n; i++) {
-            if (i < n && sameCard(sorted[i], sorted[i - 1])) {
+            if (i < n && sameNumber(sorted[i], sorted[i - 1])) {
                 count++;
             } else {
                 weight += count == 1 ? 1.0 : 1.0 + 1.0 / count;
@@ -131,7 +132,7 @@ public final class Difficulty {
         return weight;
     }
 
-    private static boolean sameCard(double left, double right) {
+    private static boolean sameNumber(double left, double right) {
         return Double.isFinite(left) && Double.isFinite(right) && Math.abs(left - right) <= UNIT_TOLERANCE;
     }
 

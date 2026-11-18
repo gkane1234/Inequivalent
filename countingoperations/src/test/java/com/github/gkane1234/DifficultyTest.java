@@ -86,11 +86,11 @@ public class DifficultyTest {
     }
 
     @Test
-    public void dealsUseOneIdeaAndStayOrdered() {
-        Difficulty.Rating spareOne = rateDeal(new double[] {9, 8, 7, 1}, 24);
-        Difficulty.Rating sixes = rateDeal(new double[] {6, 6, 6, 6}, 24);
-        Difficulty.Rating ordinary = rateDeal(new double[] {2, 4, 7, 10}, 24);
-        Difficulty.Rating fraction = rateDeal(new double[] {5, 5, 5, 1}, 24);
+    public void numbersUseOneIdeaAndStayOrdered() {
+        Difficulty.Rating spareOne = rateNumbers(new double[] {9, 8, 7, 1}, 24);
+        Difficulty.Rating sixes = rateNumbers(new double[] {6, 6, 6, 6}, 24);
+        Difficulty.Rating ordinary = rateNumbers(new double[] {2, 4, 7, 10}, 24);
+        Difficulty.Rating fraction = rateNumbers(new double[] {5, 5, 5, 1}, 24);
 
         Assert.assertEquals(2, spareOne.ideas);
         Assert.assertEquals(15, spareOne.lines);
@@ -107,8 +107,8 @@ public class DifficultyTest {
         Assert.assertEquals(26.6060643390 * 7.0 / 3.0, fraction.difficulty, 0.05);
         Assert.assertTrue(sixes.difficulty < fraction.difficulty);
 
-        Difficulty.Rating triple = rateDeal(new double[] {3, 3, 3, 8}, 24);
-        Difficulty.Rating pairs = rateDeal(new double[] {7, 7, 3, 3}, 24);
+        Difficulty.Rating triple = rateNumbers(new double[] {3, 3, 3, 8}, 24);
+        Difficulty.Rating pairs = rateNumbers(new double[] {7, 7, 3, 3}, 24);
         Assert.assertTrue(triple.difficulty < pairs.difficulty);
     }
 
@@ -121,7 +121,7 @@ public class DifficultyTest {
         Assert.assertEquals(1.0, Difficulty.repeatFactor(new double[] {1}), TOLERANCE);
     }
 
-    private static Difficulty.Rating rateDeal(double[] values, double goal) {
+    private static Difficulty.Rating rateNumbers(double[] values, double goal) {
         List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         new Solver(values.length).findSolutionsStreaming(
                 values, goal, Integer.MAX_VALUE, hits::add, null, true);
