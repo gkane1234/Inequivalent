@@ -1,6 +1,7 @@
 package com.github.gkane1234;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -19,6 +20,11 @@ import java.util.Map;
  * cards and the result of a step use half weight on the log-size. A value
  * produced by an earlier step uses full weight when it is used again. The
  * step costs are the unit. There is no anchor.
+ *
+ * <p>Repeated dealt numbers scale the finished deal. A value seen once weighs
+ * 1. A value seen {@code k} times weighs {@code 1 + 1/k}. The scale is that
+ * sum divided by how many cards were dealt, so a hand of all different
+ * numbers is unchanged.
  */
 public final class Difficulty {
     public static final double LAMBDA = 2.5;
@@ -94,7 +100,40 @@ public final class Difficulty {
             reciprocal += 1.0 / difficulty;
         }
         double deal = reciprocal == 0.0 ? Double.POSITIVE_INFINITY : 1.0 / reciprocal;
+        if (Double.isFinite(deal)) {
+            deal *= repeatFactor(values);
+        }
         return new Rating(deal, best.size(), count);
+    }
+
+    /**
+     * How much repeated cards ease the deal. Four different numbers give 1.
+     * Four of a kind give {@code (5/4) / 4}. A triple and a singleton give
+     * {@code (1 + 4/3) / 4}. Two pairs give {@code (3/2 + 3/2) / 4}.
+     */
+    public static double repeatFactor(double[] values) {
+        int n = values.length;
+        if (n == 0) {
+            return 1.0;
+        }
+        double[] sorted = new double[n];
+        System.arraycopy(values, 0, sorted, 0, n);
+        Arrays.sort(sorted);
+        double weight = 0.0;
+        int count = 1;
+        for (int i = 1; i <= n; i++) {
+            if (i < n && sameCard(sorted[i], sorted[i - 1])) {
+                count++;
+            } else {
+                weight += count == 1 ? 1.0 : 1.0 + 1.0 / count;
+                count = 1;
+            }
+        }
+        return weight / n;
+    }
+
+    private static boolean sameCard(double left, double right) {
+        return Double.isFinite(left) && Double.isFinite(right) && Math.abs(left - right) <= UNIT_TOLERANCE;
     }
 
     public static String format(Rating rating) {

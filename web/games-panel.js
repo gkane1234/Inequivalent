@@ -31,8 +31,8 @@ export function mountGames(engine) {
         Four numbers from 1 to 9. The goal is 24, and each number is used once.
         The easy, medium, and hard buttons follow the number of solutions after deduping
         repeated numbers: easy has more than 7.5, medium has between 2.5 and 7.5, and hard
-        has fewer than 2.5. A dealt board also shows an arithmetic difficulty. Lower is easier,
-        and lines that only move a 0 or a 1 count as one idea.
+        has fewer than 2.5. A dealt board also shows an arithmetic difficulty. Lower is easier.
+        Lines that only move a 0 or a 1 count as one idea, and repeated numbers make it lower.
       </p>
       <div class="modes" id="game24Bands" role="group" aria-label="24 game difficulty"></div>
       <div class="actions">
