@@ -1,8 +1,9 @@
 /**
- * Difficulty of one solved line, and of a deal.
+ * Difficulty of one solved line, and of a list of numbers with a goal.
  * Same rules as Java Difficulty. A line costs the sum of its steps, and at
  * least 1. Lines that share an identity key are one idea and the idea keeps
- * its cheapest line. The deal is the parallel sum of those ideas.
+ * its cheapest line. The difficulty is the parallel sum of those ideas, then
+ * scaled by how often the input numbers repeat.
  */
 
 import { identitySignature } from "./identity-dedupe.js";
@@ -63,11 +64,37 @@ export function rate(lines, values) {
   if (best.size === 0) return { difficulty: NaN, ideaCount: 0, lineCount: 0 };
   let reciprocal = 0;
   for (const difficulty of best.values()) reciprocal += 1 / difficulty;
+  let difficulty = reciprocal === 0 ? Infinity : 1 / reciprocal;
+  if (Number.isFinite(difficulty)) difficulty *= repeatFactor(values);
   return {
-    difficulty: reciprocal === 0 ? Infinity : 1 / reciprocal,
+    difficulty,
     ideaCount: best.size,
     lineCount: lines.length,
   };
+}
+
+/**
+ * A value seen once weighs 1. A value seen k times weighs 1 + 1/k.
+ * The factor is the sum of those weights. Four different numbers give 4.
+ */
+export function repeatFactor(values) {
+  const n = values.length;
+  if (n === 0) return 1;
+  const sorted = values.slice().sort((a, b) => a - b);
+  let weight = 0;
+  let count = 1;
+  for (let i = 1; i <= n; i++) {
+    if (i < n && sameNumber(sorted[i], sorted[i - 1])) count++;
+    else {
+      weight += count === 1 ? 1 : 1 + 1 / count;
+      count = 1;
+    }
+  }
+  return weight;
+}
+
+function sameNumber(left, right) {
+  return Number.isFinite(left) && Number.isFinite(right) && Math.abs(left - right) <= UNIT_TOLERANCE;
 }
 
 export function formatDifficulty(difficulty, ideaCount) {
