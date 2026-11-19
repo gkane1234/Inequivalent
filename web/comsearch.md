@@ -1,74 +1,267 @@
-This is a recreation of a result from [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/pdf/2210.07017) (Liu, Guan, Shen, Cheng, and Kurohashi). The counters run the counting recurrence Appendix A uses. The Python listing code does not run ComSearch’s search. That search is `ComSearchGenerator` in the Java sources.
+# Combinatorial Generation and Analysis of Algebraic Expressions
 
-## How this matches ComSearch
+This project investigates the combinatorial structure of arithmetic expressions: how many mathematically distinct expressions can be constructed from a given set of numbers, how to generate them efficiently, and how to analyze their solutions to a target equation.
 
-Appendix A of that paper builds the exponential generating function for inequivalent expressions on n labeled variables using only addition, subtraction, multiplication, and division. No unary minus. Equation (20) is
+A useful example is the classic 24 game. Given four numbers, the objective is to combine them using addition, subtraction, multiplication, and division, using each number exactly once, to produce 24. Even with only four inputs, there are many possible arrangements of numbers, operations, and parentheses.
 
-1, 6, 68, 1170, 27142, 793002, 27914126, …
+The difficulty becomes substantially greater as the number of inputs increases. A brute-force approach generates every possible expression and evaluates each one, but this produces enormous redundancy. For example, `a + b`, `b + a`, `(a + b) + c`, and `a + (b + c)` represent equivalent mathematical structures under commutativity and associativity.
 
-Those are the sizes this repository checks. `web/lib/counter.js` stores that prefix through n=7. The Java and Python `Counter` programs compute the same numbers from the [OEIS A140606](https://oeis.org/A140606) recurrence. Generation is accepted when the set for n has that many expressions: the browser check prints them for n≤6, and `Counter` reports 27,914,126 for n=7, the seventh term. `ComSearchSolverTest` checks that `ComSearchGenerator` yields `Counter.run(n)` expressions through n=4.
+This project implements algorithms to enumerate mathematically inequivalent expressions without repeatedly generating equivalent forms. It is based on the combinatorial enumeration techniques described in the research paper [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/abs/2210.07017), by Liu, Guan, Shen, Cheng, and Kurohashi.
 
-The expressions are the same kind of object. Both sides use n distinct values, the four operations, and parentheses, and treat two expressions as the same when algebra says they are (commutativity, associativity, and rewriting such as a−(b−c) versus a−b+c).
+Beyond recreating the paper's enumeration and counting methods, I implemented additional algorithms for identifying solution equivalences involving zero and one, analyzing distinct solution strategies, and estimating puzzle difficulty.
 
-The counting code runs that algorithm. Appendix A says the derivation relies on [OEIS A140606](https://oeis.org/A140606). `Counter.java` and `Python_Version/counter.py` are a port of the program linked there, [`a140606_2.pl`](https://oeis.org/A140606/a140606_2.pl.txt). It does the same decomposition as the appendix:
+## Combinatorial Enumeration of Algebraic Expressions
 
-- Two families, `sa` and `sc`, for the two choices of outermost operator (a sum of products, or a product of sums).
-- `p2m1[g] = 2^g - 1`, the paper’s factor on a set of g subexpressions.
-- `tryIndex` lists the partitions of n into g parts, which is the set-of-subexpressions construction.
-- The returned value `2*sc - sc1 + 2*sa - sa1` is the paper’s S = T − U: count the versions that allow a leading minus, then subtract the illegal all-minus forms.
+The central problem is to enumerate all mathematically inequivalent expressions involving n distinct, labeled variables and the four standard arithmetic operations, without unary minus.
 
-`ExpressionPowerSet` in `Python_Version/operation_counting.py` does yield expressions one at a time, and for n=2 those are a+b, a−b, b−a, a\*b, a/b, b/a. That is not the ComSearch search. ComSearch’s `enum` walks a list of subtrees depth-first and `smart4` refuses to build a duplicate, using commutativity, associativity, and a reversed minus, without evaluating the expression. `generate_rpn_expressions` and `generate_parenthetical_expressions` instead take the product of value permutations, operator choices, and parenthesizations, build each one, and drop it if a `seen` set already holds that numeric value.
+Rather than constructing every possible expression and removing duplicates afterward, the ComSearch approach transforms expressions into canonical structural representations, or *skeletons*. These representations capture the underlying algebraic structure while ignoring differences attributable to commutativity and associativity.
 
-## How a search runs
+The algorithm divides expressions into two symmetric categories based on their outermost operations:
 
-The solver walks those inequivalent expressions and checks each one against the goal. Nothing is stored ahead of time. It stops at the max solution count, or when you press Stop.
+- **Additive expressions:** Sums and differences of multiplicative subexpressions.
+- **Multiplicative expressions:** Products and quotients of additive subexpressions.
 
-Leave **Dedupe repeated numbers** off to keep each hit in the index order the search already uses. The same line can show up more than once when an input number is repeated, because the leaves stay distinct.
+For example, the expressions `a/b - c + d` and `a/b - (c - d)` can be rewritten into the same canonical additive structure. Similarly, `(a + b) * (c - d/e)` and `(b + a) * (c - d/e)` share the same canonical representation.
 
-Turn the option on and, for a hit only, each sum or product is flattened and its parts are ordered by their text. A set then keeps one copy of that line. Subtraction and division stay in operand order. The expressions that get checked do not change, and a miss still allocates nothing. The max solution count applies to those unique lines.
+This transformation allows the search to operate on structural equivalence classes rather than individual syntactic expressions.
 
-## Grouping ideas that only move a 0 or a 1
+### Depth-first structural generation
 
-That repeated-number pass still keeps one line per expression. For 9, 8, 7, 1 the goal 24 has fifteen of those lines, and fourteen of them are 7+8+9 with the 1 multiplied or divided onto some subexpression. `(1+9-7)*8` is a different idea: there the 1 is added. `IdentityDedupe` in the Java sources, and `identitySignature` in `web/lib/identity-dedupe.js`, build a key for that distinction. The lines shown to the player do not change. A difficulty rating counts one key once.
+I implemented the ComSearch enumeration algorithm in Java through `ComSearchGenerator`.
 
-The walk is the RPN evaluation already used to check a hit. Any operand whose value is 0 or 1, an input number or a computed subtree such as `3/3`, carries that subtree as a mark. `*1`, `/1`, `+0`, and `-0` drop the mark. The other operand keeps its own mark, so `1+0` is still a 1, and multiplying that 1 onto 5 parks both marks on the 5. `(1+0)*5` and `(5+0)*1` share a key. Several 0s and 1s are several marks on the stack at once. Countdown can include two 1s. An input 0 does not occur in these games; a computed 0 does. Using the value for anything else (`1+9`, `1/7`, `0*8`, `0-x`) clears the mark and bakes the subtree into the core. The key is the core, with pure sums and pure products flattened and ordered, plus the multiset of subtrees that were dropped. Two lines match when those keys match. Where the 0 or 1 was attached is not part of the key.
+The generator recursively partitions the input variables into groups and constructs expression trees from those partitions using depth-first search (DFS). The underlying combinatorial construction is related to Schröder's fourth problem, which concerns counting labeled series-reduced rooted trees.
 
-This is a coarser duplicate than the ones already in the search. [ComSearch](https://arxiv.org/pdf/2210.07017) and the [OEIS A140606](https://oeis.org/A140606) count treat two expressions as the same from commutativity, associativity, and the reversed-minus rewrite, without looking at values. A subtree is not known to be 1 until the numbers are substituted, so the generator cannot drop these lines while it builds. `CommutativeOrder` is that same idea applied to a hit: it reorders sums and products, and it leaves `(8+9)/1+7` and `1*(8+9)+7` as two lines.
+The implementation uses several structural constraints to avoid redundant generation:
 
-[Mark Dominus](https://blog.plover.com/math/24-puzzle-2.html) (21 August 2017) met the same fourteen-style pile on «1 3 3 5». His Ezpr normal form deletes a 1 from either bag of a product and a 0 from either bag of a sum, so `1×(3×(3+5))` and `3×((1×3)+5)` become one form. He also cancels a factor against the same factor in the denominator, so `(6÷3)×(4×3)` becomes `4×6`. The [4nums theory note](https://math24solver.com/math-24-game-theory) treats ×1 and ÷1 as the same operation and lets a factor of 1 sit on any subexpression. A later case there equates `a×b×1×1` with `a×b+1−1`. [Dan Goodman’s python-list note](https://mail.python.org/pipermail/python-list/2008-January/626365.html) (23 January 2008) lists the same unit laws, `a*1`, `a/1`, `a+0`, and `a-0`, among the equivalences for the Countdown numbers game, and several 24 solvers ([srihari-ganesh](https://srihari-ganesh.github.io/24solver/), [QiLing](https://qilingtools.com/en/math/24), [holynova/24points](https://github.com/holynova/24points)) collapse those when they print one canonical expression.
+- `UnorderedPartition` enumerates the partitions of the input variables into groups.
+- Additive groups use a (2^{g-1}) subset mask, accounting for the different sign assignments while fixing an overall sign convention.
+- Multiplicative groups use (2^g-1) possible nonempty subset assignments.
+- Expressions containing subtraction are also emitted in their algebraic opposite, ensuring that the search accounts for both signs without redundantly generating equivalent structures.
+- The generator passes expressions to a consumer as they are constructed, rather than materializing the entire expression space in memory.
 
-The mark walk follows the unit laws and Dominus’s deletion of a parked 1 or 0. It does not follow the rest of that cleanup. The dropped subtree stays in the key because every number has to be used, and the way a 0 or a 1 was made is part of the idea. `8*3*(3/3)` and `8*3+(3-3)` both leave the core `8*3`, and the payloads `3/3` and `3-3` keep them apart. That is the opposite of the 4nums case that equates two multiplied 1s with adding 1 and subtracting 1. `3*3*8/3` never has a 0 or a 1 as an operand, so this pass leaves it as its own line. The shown list stays the full set of expressions. The easy, medium, and hard bands still use that line count. The rating below counts one key once, and when several lines share a key it keeps the cheapest.
+The result is a structural search that eliminates algebraically redundant expressions during construction, rather than relying on numerical evaluation or a post-generation duplicate filter.
 
-## Rating the numbers
+### Target-based expression search
 
-A finished search reports one difficulty for the numbers and the goal. Lower is easier. Each identity key contributes its cheapest line. A line’s difficulty is the sum of its step costs, and at least 1. The difficulty is the parallel sum of those line difficulties: `1/D = 1/d1 + 1/d2 + … + 1/dn`, with `di = max(1, Ci)`.
+The Java `Solver` uses `ComSearchGenerator` to search for expressions matching a specified target.
 
-One idea leaves D equal to that idea. A second idea always pulls D below the easier of the two. No solved line leaves D undefined, and the games skip those numbers. There is no anchor. The step costs are the unit.
+Expressions are generated incrementally and evaluated using reverse Polish notation (RPN), which allows the expression tree to be evaluated using a stack. An `Expression` object is only constructed when a generated expression evaluates to the target.
 
-Repeated numbers then scale that total. A value seen once weighs 1. A value seen k times weighs 1 + 1/k, which is (k+1)/k. The scale is the sum of those weights. Four different numbers multiply by 4. Four copies of one number multiply by 5/4. 3, 3, 3, 8 multiplies by 1 + 4/3. 7, 7, 3, 3 multiplies by 3/2 + 3/2. Three copies of one number weigh less than two groups of two, so 3, 3, 3, 8 comes out easier than 7, 7, 3, 3 from the repeats alone. n different numbers multiply by n.
+The search does not require a precomputed database of expressions. It can terminate when a specified maximum number of solutions has been reached or when the user stops the search.
 
-A step pops a and b and pushes r. Each number is a reduced fraction p/q. Its size is ln(1+|p|), and 0 has size 0, so the zero in 0/7 adds nothing. A denominator adds 2.5 ln(q) at full weight on every number, including an input and a result, so a small denominator still matters and a large one matters more. The input numbers and the result use half weight on the log-size. A number produced by an earlier step uses full weight when it is used again. A negative number costs the same as its absolute value. 100 and 121 cost more because they are larger. There is no separate discount for a times table or for trailing zeros.
+## Independent Combinatorial Counting and Validation
 
-The lines shown to the player do not change. The easy, medium, and hard bands still use the commutative line count. A search that stops early, at the max solution count or at Stop, does not report a difficulty, because the missing lines would have lowered it. `Difficulty` is the Java side and `rate` in `web/lib/difficulty.js` is the same rule.
+A second major component of the project is independently reproducing the mathematical counting results used to validate the enumeration algorithm.
 
-The Java port of that search is `ComSearchGenerator`. `generate` hands each expression to a consumer as it is built. Additive groups use a 2^{g−1} mask and multiplicative groups use 2^g−1, and any expression that contains subtraction is also emitted in its algebraic opposite. `UnorderedPartition` supplies the set splits. `Solver` searches with that generator and builds an `Expression` only when a value hits the goal. `ComSearchExplorer` is the Swing UI, and `CountingMain` launches it.
+Appendix A of the ComSearch paper derives an exponential generating function (EGF) for counting inequivalent expressions involving n labeled variables.
 
-`ExpressionDynamic` in `web/lib/expression-dynamic.js` is the other generator still used by the browser. It keeps a set and drops duplicates with random truncators instead of yielding. With too few truncators that filter drops real expressions; the notes below record missing about 30 of the 27,914,126 at n=7 when only 10 truncators are used.
+An exponential generating function encodes a sequence of combinatorial counts as the coefficients of a power series:
 
-## Following the paper more closely
+[  
+F(z)=\sum_{n\geq 0}a_n\frac{z^n}{n!}  
+]
 
-1. The counters already are the A140606 algorithm Appendix A uses. `Counter.java` and `Python_Version/counter.py` cite that appendix.
-2. The Java search already uses ComSearch’s structural skip. `ComSearchGenerator` refuses the duplicate while it builds, the same idea as `enum` / `smart4`. `ExpressionPowerSet` in Python still builds every candidate and drops it after evaluation.
-3. Treat a generated expression as correct when it is the one representative the enumerator yields, not only when the set size matches Equation (20).
-4. Leave the weak-supervision ranker out of this claim. ComSearch then trains math-word-problem solvers. This repository stops at the expression set and the goal search.
+The paper constructs two families of expressions, corresponding to the two possible outermost operation classes, and derives their generating functions using combinatorial set constructions.
 
-A follow-up, once the enumeration matches Appendix D, is the paper’s false-matching problem. Several inequivalent expressions can evaluate to the same goal, and only some of them are the intended equation. The solver here already lists those hits (the 24-game examples are the small case). Ranking them, instead of returning every hit, is the next piece of the same paper. The 2024 counting paper cited below is a different extension: the same four operations plus additive inversion.
+I independently implemented the counting algorithm in both Java (`Counter.java`) and Python (`counter.py`), porting the recurrence from [OEIS A140606](https://oeis.org/A140606), which is the sequence referenced in the paper.
 
-## Acknowledgments
+The implementation reproduces the paper's counting decomposition:
 
-Other work in the area:
-[The OEIS page that has the values as well as the C code for generating the number of expressions](https://oeis.org/A140606)
+- Two recursively defined families, `sa` and `sc`, represent the additive and multiplicative outermost structures.
+- `p2m1[g] = 2^g - 1` accounts for the number of nonempty subsets of a group of g subexpressions.
+- `tryIndex` enumerates partitions of n into g parts, corresponding to the construction of sets of subexpressions.
+- The final expression, (2sc-sc_1+2sa-sa_1), implements the paper's (S=T-U) construction: counting expressions under an expanded set of sign conventions and subtracting the invalid all-negative forms.
 
-[ComSearch](https://arxiv.org/pdf/2210.07017) enumerates inequivalent expressions without a stochastic filter, for a math-word-problem task. `ComSearchGenerator` is that search in the Java sources. The counts in its Appendix A are the result recreated here.
+This provides an independent mathematical verification mechanism for the expression generator.
 
-[A paper that details a counting algorithm for inequivalent expressions over the 4 standard operations with additive inversion](https://arxiv.org/pdf/2405.13928)
+The reproduced sequence is:
+
+| Number of inputs | Inequivalent expressions |
+| ---------------- | ------------------------ |
+| 1                | 1                        |
+| 2                | 6                        |
+| 3                | 68                       |
+| 4                | 1,170                    |
+| 5                | 27,142                   |
+| 6                | 793,002                  |
+| 7                | 27,914,126               |
+
+The Java generator is tested against the independent counter through four inputs. The browser implementation also checks generated expression counts through six inputs, while the counting implementation independently calculates the seventh value.
+
+An important distinction is that matching the total number of expressions validates the size of the generated set, but does not by itself prove that every individual expression is the correct representative of its equivalence class. This distinction is important when evaluating combinatorial enumeration algorithms.
+
+## Additional Algebraic Equivalence Detection
+
+The original ComSearch equivalence rules account for structural algebraic identities, including commutativity, associativity, and transformations involving subtraction.
+
+I extended this analysis to identify another class of redundancies that only becomes apparent after substituting numerical values for the variables: expressions that differ only in how zero and one are incorporated into a solution.
+
+For example, consider:
+
+[  
+8\times 3\times(3/3)  
+]
+
+and
+
+[  
+8\times 3+(3-3)  
+]
+
+Both expressions have the same underlying numerical core, (8\times3), but incorporate the remaining inputs through different constructions of one and zero.
+
+These expressions are not equivalent under the original structural enumeration rules, because the subexpressions (3/3) and (3-3) are not algebraically interchangeable as symbolic expressions.
+
+I implemented a separate identity-detection algorithm in Java (`IdentityDedupe`) and JavaScript (`identity-dedupe.js`) to identify this additional class of solution equivalences.
+
+### Mark-based identity analysis
+
+The algorithm traverses the expression using the same RPN evaluation process used by the solver, maintaining additional metadata alongside numerical values.
+
+When an operand evaluates to zero or one, it is marked. This includes both original input values and intermediate results, such as (3/3=1).
+
+The algorithm propagates or removes these marks according to the identity operations:
+
+[  
+x\times1=x  
+]
+
+[  
+x/1=x  
+]
+
+[  
+x+0=x  
+]
+
+[  
+x-0=x  
+]
+
+When a zero or one is used in an operation that does not preserve its identity, the mark is cleared and the corresponding subtree becomes part of the expression's core.
+
+The resulting canonical identity key consists of:
+
+1. The remaining expression core, with pure sums and products flattened and their components ordered.
+2. A multiset of the zero- or one-valued subexpressions removed during evaluation.
+
+This allows expressions to be grouped according to their underlying solution structure without losing information about how the remaining inputs were used.
+
+For example, `(1+9-7)*8` represents a different strategy from `7+8+9` with the remaining 1 multiplied or divided into a subexpression. The algorithm preserves that distinction.
+
+Importantly, this is deliberately a narrower equivalence relation than full algebraic simplification. It does not cancel arbitrary common factors or equate constructions such as multiplying by two ones with adding one and subtracting one. The way a zero or one was constructed remains part of the identity key.
+
+The original expressions are still displayed to the user. This additional equivalence analysis is used separately to measure the number of distinct underlying solution strategies.
+
+## Quantitative Difficulty Estimation
+
+I also developed a difficulty-scoring algorithm that estimates how challenging a numerical puzzle is based on the structure and distribution of its solutions.
+
+Rather than simply counting the number of expressions that reach the target, the algorithm considers the complexity of individual operations and the number of distinct solution strategies.
+
+### Expression-level costs
+
+Each arithmetic operation incurs a cost based on the operands and result.
+
+Values are represented as reduced fractions (p/q). The magnitude component is based on:
+
+[  
+\ln(1+|p|)  
+]
+
+The denominator incurs an additional cost:
+
+[  
+2.5\ln(q)  
+]
+
+The algorithm distinguishes between input values, intermediate values, and final results. Input numbers and the final result receive half weight on the logarithmic magnitude term, while intermediate results receive full weight when used in subsequent operations.
+
+Negative values have the same cost as their absolute values. Zero has a magnitude cost of zero.
+
+The cost of an expression is the sum of its individual operation costs, with a minimum expression cost of one.
+
+### Combining distinct solutions
+
+Each distinct identity key contributes its cheapest expression cost.
+
+If the resulting solution strategies have costs (d_1,d_2,\ldots,d_n), the overall difficulty is calculated using a parallel-sum relationship:
+
+[  
+\frac{1}{D}=\sum_{i=1}^{n}\frac{1}{d_i}  
+]
+
+Equivalently:
+
+[  
+D=\left(\sum_{i=1}^{n}\frac{1}{d_i}\right)^{-1}  
+]
+
+This construction means that multiple independent ways of reaching the target reduce the overall difficulty. A puzzle with one solution has a difficulty equal to that solution's cost, while additional solution strategies lower the aggregate score.
+
+### Accounting for repeated inputs
+
+The algorithm also adjusts difficulty based on the frequency of repeated input numbers.
+
+A number appearing once receives a weight of 1. A number appearing k times receives a weight of:
+
+[  
+w(k)=1+\frac{1}{k}  
+]
+
+The sum of these weights scales the aggregate difficulty.
+
+For example, four distinct inputs produce a multiplier of 4, whereas four copies of the same input produce a multiplier of (5/4).
+
+This models the difference between puzzles with distinct numbers and those with repeated values, which can have substantially different combinatorial structures.
+
+The difficulty calculation is implemented in Java (`Difficulty`) and JavaScript (`difficulty.js`). It is only reported after a complete search: stopping early would omit potential solutions and incorrectly increase the estimated difficulty.
+
+## Multiple Implementations and Experimental Analysis
+
+The project includes implementations across Java, Python, and JavaScript, allowing the algorithms to be independently tested and compared.
+
+**Java**
+
+- `ComSearchGenerator`: Structural depth-first enumeration of inequivalent expressions.
+- `Solver`: Target-based search and evaluation.
+- `Counter`: Independent combinatorial counting.
+- `IdentityDedupe`: Value-dependent zero/one identity detection.
+- `Difficulty`: Quantitative difficulty estimation.
+- `ComSearchExplorer`: Swing-based interface.
+- `ComSearchSolverTest`: Tests the generator against the independent counting implementation.
+
+**Python**
+
+- `counter.py`: Independent implementation of the OEIS A140606 recurrence.
+- `operation_counting.py`: Expression generation and operation-counting experiments.
+- `ExpressionPowerSet`: Generates expressions individually for analysis.
+
+**JavaScript**
+
+- `expression-dynamic.js`: Browser-based expression generation.
+- `counter.js`: Stored combinatorial reference counts.
+- `identity-dedupe.js`: Additional identity detection.
+- `difficulty.js`: Browser implementation of the difficulty model.
+
+An additional part of the research involved comparing different approaches to duplicate elimination. In particular, the Python implementations that generate candidate expressions through permutations, operation combinations, and parenthesizations use numerical evaluation and a `seen` set to remove duplicates afterward. This differs from the Java ComSearch generator, which eliminates structural duplicates before constructing the full expression.
+
+The browser's earlier dynamic generator also uses random truncators to filter duplicate expressions. Experimental analysis showed that using too few truncators can inadvertently discard valid expressions, including approximately 30 of the 27,914,126 expressions at seven inputs when only 10 truncators are used. This illustrates the importance of distinguishing between a heuristic filter and an exhaustive enumeration algorithm.
+
+## Research Context and Further Work
+
+This project recreates and extends the expression-enumeration and counting components of ComSearch, rather than the paper's complete math-word-problem-solving pipeline.
+
+The original paper uses the generated equations to identify candidate mathematical explanations for numerical word problems. Even after eliminating algebraically equivalent expressions, multiple inequivalent equations can evaluate to the same answer. This is the paper's *false-matching problem*: numerical agreement does not necessarily imply that an equation represents the intended reasoning.
+
+The paper addresses this through a ranking model that selects among candidate equations. My implementation focuses on the underlying combinatorial search, expression analysis, and quantitative evaluation rather than the machine-learning ranking component.
+
+A natural next step would be to investigate the paper's false-matching problem directly: developing methods to distinguish equations that merely produce the correct numerical answer from those that represent the intended mathematical reasoning.
+
+## References
+
+- [ComSearch: Equation Searching with Combinatorial Strategy for Solving Math Word Problems with Weak Supervision](https://arxiv.org/abs/2210.07017) — Liu, Guan, Shen, Cheng, and Kurohashi.
+- [OEIS A140606](https://oeis.org/A140606) — Counting sequence and recurrence implementation.
+- [Counting Inequivalent Expressions over the Four Standard Operations with Additive Inversion](https://arxiv.org/abs/2405.13928) — Related work on extending the counting problem.
+
+**Technologies and Concepts:** Java, Python, JavaScript, combinatorics, exponential generating functions, recurrence relations, depth-first search, combinatorial partitions, expression trees, reverse Polish notation, algebraic equivalence, algorithm validation, and mathematical optimization.
