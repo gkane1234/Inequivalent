@@ -60,7 +60,7 @@ export function findAllSolutions(expressionList, values, goal, maxSolutions = 20
   }
 
   if (!aborted && solutions.length > 0) {
-    const rating = rate(solutions.map((solution) => solution.program), values);
+    const rating = rate(solutions.map((solution) => solution.program), values, goal);
     solutions.difficulty = rating.difficulty;
     solutions.ideaCount = rating.ideaCount;
   }

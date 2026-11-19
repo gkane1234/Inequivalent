@@ -66,6 +66,11 @@ public class Solver {
         generator.cancel();
     }
 
+    /** True when this search was stopped before every expression was visited. */
+    public boolean isCancelled() {
+        return generator.isCancelled();
+    }
+
     /** Running totals from a streaming search. */
     public static final class SearchStats {
         public final long found;
