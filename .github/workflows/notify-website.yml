@@ -1,0 +1,29 @@
+name: Update the portfolio solver
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "web/**"
+      - ".github/workflows/notify-website.yml"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the website repo to copy web/
+        env:
+          TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "WEBSITE_DISPATCH_TOKEN is not set."
+            echo "The portfolio still copies the solver on its hourly schedule."
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/gkane1234/website/dispatches \
+            -d '{"event_type":"inequivalent-web"}'
