@@ -43,6 +43,21 @@ public class RangeSurveyTest {
     }
 
     @Test
+    public void tooManySolutionsAreNotRated() {
+        List<RangeSurvey.Row> rows = new ArrayList<RangeSurvey.Row>();
+        RangeSurvey.search(new Solver(2, 1), 1, 2, 0, false, () -> false, null, 1, rows, null);
+        Assert.assertEquals(Arrays.asList("1 1", "1 2", "2 2"), texts(rows));
+        Assert.assertEquals(Arrays.asList(2, 0, 2), counts(rows));
+        Assert.assertTrue(rows.get(0).overLimit());
+        Assert.assertFalse(rows.get(1).overLimit());
+        Assert.assertTrue(rows.get(2).overLimit());
+        Assert.assertTrue(Double.isNaN(rows.get(0).difficulty()));
+        Assert.assertTrue(Double.isNaN(rows.get(2).difficulty()));
+        List<RangeSurvey.Row> kept = RangeSurvey.select(rows, 0, 100, RangeSurvey.Sort.SOLUTION_COUNT);
+        Assert.assertEquals(Arrays.asList("1 2"), texts(kept));
+    }
+
+    @Test
     public void sortByDifficultyPutsHigherScoresFirst() {
         List<RangeSurvey.Row> rows = Arrays.asList(
                 row(8, 2.0, 1, 1, 1, 8),
@@ -85,7 +100,7 @@ public class RangeSurveyTest {
         Assert.assertEquals(direct, match.solutions());
         List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         new Solver(4, 1).findSolutionsStreaming(values, 24, Integer.MAX_VALUE, hits::add, null, true);
-        Assert.assertEquals(Difficulty.rate(hits, values).difficulty, match.difficulty(), 1e-9);
+        Assert.assertEquals(Difficulty.rate(hits, values, 24).difficulty, match.difficulty(), 1e-9);
         Assert.assertEquals(RangeSurvey.multisetCount(4, 5), rows.size());
     }
 

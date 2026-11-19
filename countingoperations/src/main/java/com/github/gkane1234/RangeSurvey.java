@@ -33,11 +33,17 @@ public final class RangeSurvey {
         private final int[] values;
         private final int solutions;
         private final double difficulty;
+        private final boolean overLimit;
 
         public Row(int[] values, int solutions, double difficulty) {
+            this(values, solutions, difficulty, false);
+        }
+
+        public Row(int[] values, int solutions, double difficulty, boolean overLimit) {
             this.values = values.clone();
             this.solutions = solutions;
             this.difficulty = difficulty;
+            this.overLimit = overLimit;
         }
 
         public int solutions() {
@@ -46,6 +52,11 @@ public final class RangeSurvey {
 
         public double difficulty() {
             return difficulty;
+        }
+
+        /** True when the search stopped because the solution count passed the maximum. */
+        public boolean overLimit() {
+            return overLimit;
         }
 
         /** Blank when the deal has no solved line. */
@@ -95,7 +106,7 @@ public final class RangeSurvey {
      */
     public static int search(Solver solver, int min, int max, double goal, boolean dedupeRepeated,
                               BooleanSupplier stop, List<Row> into, IntConsumer onProgress) {
-        return search(solver, min, max, goal, dedupeRepeated, stop, null, into, onProgress);
+        return search(solver, min, max, goal, dedupeRepeated, stop, null, null, into, onProgress);
     }
 
     /**
@@ -103,6 +114,16 @@ public final class RangeSurvey {
      */
     public static int search(Solver solver, int min, int max, double goal, boolean dedupeRepeated,
                               BooleanSupplier stop, List<Solver> live, List<Row> into, IntConsumer onProgress) {
+        return search(solver, min, max, goal, dedupeRepeated, stop, live, null, into, onProgress);
+    }
+
+    /**
+     * Same search. When {@code solutionCap} is set, a set is not rated once it has more
+     * solutions than that, and its search stops there.
+     */
+    public static int search(Solver solver, int min, int max, double goal, boolean dedupeRepeated,
+                              BooleanSupplier stop, List<Solver> live, Integer solutionCap,
+                              List<Row> into, IntConsumer onProgress) {
         if (min > max) {
             throw new IllegalArgumentException("Range min must be ≤ max.");
         }
@@ -140,16 +161,25 @@ public final class RangeSurvey {
                             }
                             double[] numbers = toDoubles(values);
                             List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
+                            int searchLimit = solutionCap == null || solutionCap == Integer.MAX_VALUE
+                                    ? Integer.MAX_VALUE
+                                    : solutionCap + 1;
                             Solver.SearchStats stats = current.findSolutionsStreaming(
-                                    numbers, goal, Integer.MAX_VALUE, hits::add, null, dedupeRepeated);
-                            if (current.isCancelled()) {
+                                    numbers, goal, searchLimit, hits::add, null, dedupeRepeated);
+                            if (stopped(stop)) {
+                                return;
+                            }
+                            boolean overLimit = solutionCap != null && stats.found > solutionCap;
+                            if (!overLimit && current.isCancelled()) {
                                 return;
                             }
                             int solutions = stats.found > Integer.MAX_VALUE
                                     ? Integer.MAX_VALUE
                                     : (int) stats.found;
-                            slots[index] = new Row(values, solutions,
-                                    Difficulty.rate(hits, numbers).difficulty);
+                            double difficulty = overLimit
+                                    ? Double.NaN
+                                    : Difficulty.rate(hits, numbers, goal).difficulty;
+                            slots[index] = new Row(values, solutions, difficulty, overLimit);
                             int done = completed.incrementAndGet();
                             if (onProgress != null) {
                                 onProgress.accept(done);
@@ -279,6 +309,9 @@ public final class RangeSurvey {
         }
         List<Row> kept = new ArrayList<Row>();
         for (Row row : rows) {
+            if (row.overLimit()) {
+                continue;
+            }
             if (row.solutions < minSolutions) {
                 continue;
             }

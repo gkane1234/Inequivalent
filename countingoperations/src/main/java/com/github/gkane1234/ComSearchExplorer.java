@@ -1,5 +1,7 @@
 package com.github.gkane1234;
 
+import java.math.BigInteger;
+import java.util.Locale;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -288,6 +290,7 @@ public class ComSearchExplorer extends JFrame {
         }
 
         int n = values.length;
+        final BigInteger expressionTotal = Counter.run(n);
         final boolean dedupeRepeated = dedupeRepeatedBox.isSelected();
         showingSurvey = false;
         solver = new Solver(n);
@@ -296,7 +299,7 @@ public class ComSearchExplorer extends JFrame {
         userStopped.set(false);
         setRunning(true);
         final long startedAtNanos = System.nanoTime();
-        statusLabel.setText(formatStatus(0, 0, 0)
+        statusLabel.setText(formatStatus(0, 0, expressionTotal, 0)
                 + "  Enumerating n=" + n + " (hits appear live; Stop anytime)…");
         appendLine("--- start: values=" + java.util.Arrays.toString(values)
                 + " goal=" + goal + " ("
@@ -308,7 +311,7 @@ public class ComSearchExplorer extends JFrame {
         final List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         worker = new SwingWorker<Void, String>() {
             private Solver.SearchStats lastStats = new Solver.SearchStats(0, 0);
-            private long elapsedMs;
+            private long elapsedNanos;
 
             @Override
             protected Void doInBackground() {
@@ -329,20 +332,20 @@ public class ComSearchExplorer extends JFrame {
                             publish("STAT");
                         },
                         dedupeRepeated);
-                elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
+                elapsedNanos = System.nanoTime() - startedAtNanos;
                 return null;
             }
 
             @Override
             protected void process(java.util.List<String> chunks) {
-                long liveMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
+                long liveNanos = System.nanoTime() - startedAtNanos;
                 for (String line : chunks) {
                     if ("STAT".equals(line)) {
-                        statusLabel.setText(formatStatus(solutionCount.get(), checkedCount.get(), liveMs)
+                        statusLabel.setText(formatStatus(solutionCount.get(), checkedCount.get(), expressionTotal, liveNanos)
                                 + "  Searching…");
                     } else if (line.startsWith("SOL:")) {
                         appendLine(line.substring(4));
-                        statusLabel.setText(formatStatus(solutionCount.get(), checkedCount.get(), liveMs)
+                        statusLabel.setText(formatStatus(solutionCount.get(), checkedCount.get(), expressionTotal, liveNanos)
                                 + "  Searching…");
                     }
                 }
@@ -371,13 +374,13 @@ public class ComSearchExplorer extends JFrame {
                     solutionCount.set((int) Math.min(found, Integer.MAX_VALUE));
                     checkedCount.set(checked);
                 }
-                if (elapsedMs <= 0) {
-                    elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
+                if (elapsedNanos <= 0) {
+                    elapsedNanos = System.nanoTime() - startedAtNanos;
                 }
                 String prefix = userStopped.get() ? "Stopped. " : "Done. ";
-                String end = prefix + formatStatus(found, checked, elapsedMs);
+                String end = prefix + formatStatus(found, checked, expressionTotal, elapsedNanos);
                 if (!userStopped.get()) {
-                    String difficulty = Difficulty.format(Difficulty.rate(hits, values));
+                    String difficulty = Difficulty.format(Difficulty.rate(hits, values, goal));
                     if (!difficulty.isEmpty()) {
                         end = end + "  " + difficulty;
                     }
@@ -389,10 +392,22 @@ public class ComSearchExplorer extends JFrame {
         worker.execute();
     }
 
-    private static String formatStatus(long found, long checked, long elapsedMs) {
-        double pct = checked == 0 ? 0.0 : 100.0 * found / checked;
-        return String.format("%d hit / %d checked (%.4f%%) in %s",
-                found, checked, pct, formatDuration(elapsedMs));
+    private static String formatStatus(long found, long checked, BigInteger total, long elapsedNanos) {
+        double done = total.signum() <= 0 ? 0.0 : Math.min(100.0, checked * 100.0 / total.doubleValue());
+        double perSecond = elapsedNanos <= 0 ? 0.0 : checked * 1_000_000_000.0 / elapsedNanos;
+        return String.format(Locale.US, "%d hit · %s of %s (%.2f%%) · %,.0f/s · %s",
+                found, formatCount(checked), formatTotal(total), done, perSecond, formatDuration(elapsedNanos / 1_000_000L));
+    }
+
+    private static String formatCount(long value) {
+        return String.format(Locale.US, "%,d", value);
+    }
+
+    private static String formatTotal(BigInteger total) {
+        if (total.bitLength() < 63) {
+            return String.format(Locale.US, "%,d", total.longValue());
+        }
+        return total.toString();
     }
 
     private static String formatDuration(long elapsedMs) {
@@ -424,13 +439,14 @@ public class ComSearchExplorer extends JFrame {
         }
 
         final boolean dedupeRepeated = dedupeRepeatedBox.isSelected();
+        final BigInteger expressionTotal = Counter.run(values.length);
         showingSurvey = false;
         solver = new Solver(values.length);
         userStopped.set(false);
         setRunning(true);
         outputArea.setText("");
         final long startedAtNanos = System.nanoTime();
-        statusLabel.setText("Solving before the difficulty breakdown…");
+        statusLabel.setText(formatStatus(0, 0, expressionTotal, 0) + "  Solving…");
         final List<EvaluatedExpression> hits = new ArrayList<EvaluatedExpression>();
         worker = new SwingWorker<Difficulty.DealTrace, Solver.SearchStats>() {
             @Override
@@ -441,14 +457,14 @@ public class ComSearchExplorer extends JFrame {
                 if (userStopped.get() || solver.isCancelled()) {
                     return null;
                 }
-                return Difficulty.explain(hits, values);
+                return Difficulty.explain(hits, values, goal);
             }
 
             @Override
             protected void process(java.util.List<Solver.SearchStats> chunks) {
                 Solver.SearchStats stats = chunks.get(chunks.size() - 1);
-                long liveMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
-                statusLabel.setText(formatStatus(stats.found, stats.checked, liveMs) + "  Solving…");
+                long liveNanos = System.nanoTime() - startedAtNanos;
+                statusLabel.setText(formatStatus(stats.found, stats.checked, expressionTotal, liveNanos) + "  Solving…");
             }
 
             @Override
@@ -555,7 +571,7 @@ public class ComSearchExplorer extends JFrame {
             protected Integer doInBackground() {
                 int completed = RangeSurvey.search(
                         solver, min, max, goal, dedupeRepeated,
-                        userStopped::get, liveSolvers, rows, scanned -> publish(scanned));
+                        userStopped::get, liveSolvers, maxSolutions, rows, scanned -> publish(scanned));
                 surveyScanned = completed;
                 elapsedMs = (System.nanoTime() - startedAtNanos) / 1_000_000L;
                 return completed;

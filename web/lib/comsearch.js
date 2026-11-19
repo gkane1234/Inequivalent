@@ -499,7 +499,7 @@ export function solveComSearch(values, goal, maxSolutions, onProgress, onSolutio
 
   report(true);
   const stoppedEarly = aborted || cancelled || Boolean(shouldStop && shouldStop());
-  const rating = !stoppedEarly && solutions.length > 0 ? rate(solutions.map((solution) => solution.program), values) : null;
+  const rating = !stoppedEarly && solutions.length > 0 ? rate(solutions.map((solution) => solution.program), values, goal) : null;
   return {
     solutions,
     checked,

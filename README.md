@@ -96,13 +96,13 @@ The mark walk follows the unit laws and Dominus’s deletion of a parked 1 or 0.
 
 ## Rating the numbers
 
-A finished search reports one difficulty for the numbers and the goal. Lower is easier. Each identity key contributes its cheapest line. A line’s difficulty is the sum of its step costs, and at least 1. The difficulty is the parallel sum of those line difficulties: `1/D = 1/d1 + 1/d2 + … + 1/dn`, with `di = max(1, Ci)`.
+A finished search reports one difficulty for the numbers and the goal. Lower is easier. Each identity key contributes its cheapest line. A step charges the two numbers it uses. A line adds a term for the goal, and the line score is at least 1. The difficulty is the parallel sum of those line scores, multiplied by the repeated-number scale. The rules for each of those parts are the methods in `Difficulty`.
 
-One idea leaves D equal to that idea. A second idea always pulls D below the easier of the two. No solved line leaves D undefined, and the games skip those numbers. There is no anchor. The step costs are the unit.
+One idea leaves the idea score equal to that line. A second idea always pulls it below the easier of the two. The repeated-number scale then multiplies that result. No solved line leaves the difficulty undefined, and the games skip those numbers.
 
-Repeated numbers then scale that total. A value seen once weighs 1. A value seen k times weighs 1 + 1/k, which is (k+1)/k. The scale is the sum of those weights. Four different numbers multiply by 4. Four copies of one number multiply by 5/4. 3, 3, 3, 8 multiplies by 1 + 4/3. 7, 7, 3, 3 multiplies by 3/2 + 3/2. Three copies of one number weigh less than two groups of two, so 3, 3, 3, 8 comes out easier than 7, 7, 3, 3 from the repeats alone. n different numbers multiply by n.
+Repeated numbers use that scale. A value seen once weighs 2. A value seen k times weighs half of 1 + 1/k, which is (k+1)/(2k). The scale is the sum of those weights. Four different numbers multiply by 8. Four copies of one number multiply by 5/8. 3, 3, 3, 8 multiplies by 8/3. 7, 7, 3, 3 multiplies by 3/2. n different numbers multiply by 2n.
 
-A step pops a and b and pushes r. Each number is a reduced fraction p/q. Its size is ln(1+|p|), and 0 has size 0, so the zero in 0/7 adds nothing. A denominator adds 2.5 ln(q) at full weight on every number, including an input and a result, so a small denominator still matters and a large one matters more. The input numbers and the result use half weight on the log-size. A number produced by an earlier step uses full weight when it is used again. A negative number costs the same as its absolute value. 100 and 121 cost more because they are larger. There is no separate discount for a times table or for trailing zeros.
+A number is a reduced fraction p/q. Its default size is log2(1+|p|), and 0 has size 0. A denominator multiplies that by 2.5 log2(q). A starting number is then multiplied by 1/2. A number made earlier is used at full cost when a later step consumes it. The result of a step is not charged until then, except the goal, which is charged once per line at half weight. A negative number costs the same as its absolute value.
 
 The lines shown to the player do not change. The easy, medium, and hard bands still use the commutative line count. A search that stops early, at the max solution count or at Stop, does not report a difficulty, because the missing lines would have lowered it. `Difficulty` is the Java side and `rate` in `web/lib/difficulty.js` is the same rule.
 
