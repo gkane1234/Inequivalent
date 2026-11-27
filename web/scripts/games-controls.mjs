@@ -13,8 +13,11 @@ import {
 } from "../lib/games.js";
 
 assert.equal(bandForCount(0), null);
-assert.equal(bandForCount(1), "hard");
+assert.equal(bandForCount(1), "hardest");
+assert.equal(bandForCount(1.4), "hardest");
+assert.equal(bandForCount(1.5), "hard");
 assert.equal(bandForCount(2), "hard");
+assert.equal(bandForCount(2.4), "hard");
 assert.equal(bandForCount(2.5), "medium");
 assert.equal(bandForCount(3), "medium");
 assert.equal(bandForCount(7), "medium");
@@ -65,11 +68,11 @@ function solve(board, goal, maxSolutions) {
 
 const repeated = await solve([3, 3, 7, 7], 24, 20);
 assert.equal(repeated.length, 1);
-assert.equal(bandForCount(repeated.length), "hard");
+assert.equal(bandForCount(repeated.length), "hardest");
 const repeatedRaw = solveComSearch([3, 3, 7, 7], 24, 20).solutions.length;
 assert.ok(repeatedRaw > repeated.length);
 
-for (const band of ["easy", "medium", "hard"]) {
+for (const band of ["easy", "medium", "hard", "hardest"]) {
   const puzzle = await find24Puzzle(solve, band);
   assert.equal(puzzle.values.length, 4);
   assert.equal(puzzle.goal, 24);

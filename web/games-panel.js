@@ -1,10 +1,12 @@
 import { formatDifficulty } from "./lib/difficulty.js";
 import { find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
+import { wheelSvg } from "./lib/wheel.js";
 
 const BANDS = [
   ["easy", "Easy"],
   ["medium", "Medium"],
   ["hard", "Hard"],
+  ["hardest", "Hardest"],
 ];
 
 /**
@@ -29,10 +31,13 @@ export function mountGames(engine) {
       <h3>24 game</h3>
       <p>
         Four numbers from 1 to 9. The goal is 24, and each number is used once.
-        The easy, medium, and hard buttons follow the number of solutions after deduping
-        repeated numbers: easy has more than 7.5, medium has between 2.5 and 7.5, and hard
-        has fewer than 2.5. The numbers also show an arithmetic difficulty. Lower is easier.
-        Lines that only move a 0 or a 1 count as one idea, and repeated numbers make it lower.
+        The card shows all four numbers upright. Corner dots mark the band: one white dot
+        is easy, two red dots are medium, three yellow dots are hard, and four green dots
+        are hardest. After deduping repeated numbers, easy has more than 7.5 distinct
+        solutions, medium has from 2.5 through 7.5, hard has from 1.5 up to but not
+        including 2.5, and hardest has fewer than 1.5. The numbers also show an arithmetic
+        difficulty. Lower is easier. Lines that only move a 0 or a 1 count as one idea,
+        and repeated numbers make it lower.
       </p>
       <div class="modes" id="game24Bands" role="group" aria-label="24 game difficulty"></div>
       <div class="actions">
@@ -40,7 +45,7 @@ export function mountGames(engine) {
         <button type="button" class="ghost" id="game24Reveal" disabled>Reveal answer</button>
       </div>
       <div class="meta" id="game24Status" aria-live="polite"></div>
-      <div class="number-chips" id="game24Numbers"></div>
+      <div class="game-wheel" id="game24Wheel"></div>
       <div class="results game-answer hidden" id="game24Answer"></div>
     </div>
 
@@ -70,7 +75,7 @@ export function mountGames(engine) {
     deal24: host.querySelector("#game24Deal"),
     reveal24: host.querySelector("#game24Reveal"),
     status24: host.querySelector("#game24Status"),
-    numbers24: host.querySelector("#game24Numbers"),
+    wheel24: host.querySelector("#game24Wheel"),
     answer24: host.querySelector("#game24Answer"),
     dealCount: host.querySelector("#countdownDeal"),
     revealCount: host.querySelector("#countdownReveal"),
@@ -142,7 +147,7 @@ export function mountGames(engine) {
     puzzle24 = null;
     els.answer24.classList.add("hidden");
     els.answer24.textContent = "";
-    els.numbers24.replaceChildren();
+    els.wheel24.replaceChildren();
     refresh();
     try {
       puzzle24 = await find24Puzzle(engine.solve, band, {
@@ -150,7 +155,7 @@ export function mountGames(engine) {
           els.status24.textContent = `Looking for a ${band} board… try ${attempt}: ${values.join(", ")}`;
         },
       });
-      paintNumbers(els.numbers24, puzzle24.values, "24");
+      els.wheel24.innerHTML = wheelSvg(puzzle24.values, puzzle24.band);
       els.status24.textContent = withDifficulty(
         `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)}.`,
         puzzle24

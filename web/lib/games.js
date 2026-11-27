@@ -11,18 +11,21 @@ export function capForBand(band) {
   if (band === "easy") return 9;
   if (band === "medium") return 8;
   if (band === "hard") return 3;
+  if (band === "hardest") return 2;
   throw new Error(`Unknown difficulty ${band}`);
 }
 
 /**
  * Easy is more than 7.5 distinct solutions, medium is from 2.5 through 7.5,
- * and hard is fewer than 2.5. Zero solutions is not a puzzle.
+ * hard is from 1.5 up to but not including 2.5, and hardest is fewer than 1.5.
+ * Zero solutions is not a puzzle.
  */
 export function bandForCount(count) {
   if (!(count > 0)) return null;
   if (count > 7.5) return "easy";
-  if (count < 2.5) return "hard";
-  return "medium";
+  if (count >= 2.5) return "medium";
+  if (count >= 1.5) return "hard";
+  return "hardest";
 }
 
 export function matchesBand(count, band) {
