@@ -80,7 +80,7 @@ npx serve web -p 5173
 
 ## Usage
 
-`ComSearchExplorer` is the Java UI. Choose how many numbers are in the expression and a goal value. Type the numbers, or set a range and randomize them. Start streams matches as they are found. Stop keeps the output already printed. Leave Dedupe repeated numbers off to keep each hit in the index order the search already uses. Turn it on and each hit reorders its sums and products by the text of those parts, then a set keeps one copy of each line. The expressions that get checked do not change.
+`ComSearchExplorer` is the Java UI. Choose how many numbers are in the expression and a goal value. Type the numbers, or set a range and randomize them. Start streams matches as they are found. Stop keeps the output already printed. Dedupe repeated numbers starts on: each hit reorders its sums and products by the text of those parts, then a set keeps one copy of each line. Turn it off to keep every labeled hit in the index order the search already uses. The expressions that get checked do not change. The 24-game strata panel computes and tests difficulty bands as described below.
 
 ## Grouping ideas that only move a 0 or a 1
 
@@ -92,7 +92,7 @@ This is a coarser duplicate than the ones already in the search. [ComSearch](htt
 
 [Mark Dominus](https://blog.plover.com/math/24-puzzle-2.html) (21 August 2017) met the same pile on «1 3 3 5». His Ezpr normal form deletes a 1 from either bag of a product and a 0 from either bag of a sum, so `1×(3×(3+5))` and `3×((1×3)+5)` become one form. He also cancels a factor against the same factor in the denominator, so `(6÷3)×(4×3)` becomes `4×6`. The [4nums theory note](https://math24solver.com/math-24-game-theory) treats ×1 and ÷1 as the same operation and lets a factor of 1 sit on any subexpression. A later case there equates `a×b×1×1` with `a×b+1−1`. [Dan Goodman’s python-list note](https://mail.python.org/pipermail/python-list/2008-January/626365.html) (23 January 2008) lists the same unit laws, `a*1`, `a/1`, `a+0`, and `a-0`, among the equivalences for the Countdown numbers game, and several 24 solvers ([srihari-ganesh](https://srihari-ganesh.github.io/24solver/), [QiLing](https://qilingtools.com/en/math/24), [holynova/24points](https://github.com/holynova/24points)) collapse those when they print one canonical expression.
 
-The mark walk follows the unit laws and Dominus’s deletion of a parked 1 or 0. It does not follow the rest of that cleanup. The dropped subtree stays in the key because every number has to be used, and the way a 0 or a 1 was made is part of the idea. `8*3*(3/3)` and `8*3+(3-3)` both leave the core `8*3`, and the payloads `3/3` and `3-3` keep them apart. That is the opposite of the 4nums case that equates two multiplied 1s with adding 1 and subtracting 1. `3*3*8/3` never has a 0 or a 1 as an operand, so this pass leaves it as its own line. The shown list stays the full set of expressions. The easy, medium, and hard bands still use that line count. The rating below counts one key once, and when several lines share a key it keeps the cheapest.
+The mark walk follows the unit laws and Dominus’s deletion of a parked 1 or 0. It does not follow the rest of that cleanup. The dropped subtree stays in the key because every number has to be used, and the way a 0 or a 1 was made is part of the idea. `8*3*(3/3)` and `8*3+(3-3)` both leave the core `8*3`, and the payloads `3/3` and `3-3` keep them apart. That is the opposite of the 4nums case that equates two multiplied 1s with adding 1 and subtracting 1. `3*3*8/3` never has a 0 or a 1 as an operand, so this pass leaves it as its own line. The shown list stays the full set of expressions. The rating below counts one key once, and when several lines share a key it keeps the cheapest. The easy / medium / hard / hardest buttons use that rating, not the line count.
 
 ## Rating the numbers
 
@@ -104,7 +104,17 @@ Repeated numbers then scale that total. A value seen once weighs 1. A value seen
 
 A step pops a and b and pushes r. Each number is a reduced fraction p/q. Its size is ln(1+|p|), and 0 has size 0, so the zero in 0/7 adds nothing. A denominator adds 2.5 ln(q) at full weight on every number, including an input and a result, so a small denominator still matters and a large one matters more. The input numbers and the result use half weight on the log-size. A number produced by an earlier step uses full weight when it is used again. A negative number costs the same as its absolute value. 100 and 121 cost more because they are larger. There is no separate discount for a times table or for trailing zeros.
 
-The lines shown to the player do not change. The easy, medium, and hard bands still use the commutative line count. A search that stops early, at the max solution count or at Stop, does not report a difficulty, because the missing lines would have lowered it. `Difficulty` is the Java side and `rate` in `web/lib/difficulty.js` is the same rule.
+The lines shown to the player do not change. A search that stops early, at the max solution count or at Stop, does not report a difficulty, because the missing lines would have lowered it. `Difficulty` is the Java side and `rate` in `web/lib/difficulty.js` is the same rule.
+
+## 24-game difficulty strata
+
+`DifficultyStrata` rates every nondecreasing four-tuple with values in `[1, 13]` that hits 24, sorts those difficulties, and cuts at the 60th, 85th, and 95th percentiles (easy ≤ p60, medium ≤ p85, hard ≤ p95, hardest above). The ComSearch explorer starts with dedupe on, lets you edit those percentiles, recompute from the Range fields, and tweak the numerical bounds while dealing Easy / Medium / Hard / Hardest boards. Recompute whenever the difficulty equation changes:
+
+```bash
+mvn -f countingoperations/pom.xml exec:java -Dexec.mainClass=com.github.gkane1234.DifficultyStrata
+```
+
+Paste the printed `easyMax` / `mediumMax` / `hardMax` into `DIFFICULTY_BOUNDS` in `web/lib/games.js`. The online app only needs those numbers.
 
 
 ## Development
