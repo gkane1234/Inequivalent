@@ -114,7 +114,7 @@ The lines shown to the player do not change. A search that stops early, at the m
 mvn -f countingoperations/pom.xml exec:java -Dexec.mainClass=com.github.gkane1234.DifficultyStrata
 ```
 
-Paste the printed `easyMax` / `mediumMax` / `hardMax` into `DIFFICULTY_BOUNDS` in `web/lib/games.js`. The online app only needs those numbers.
+Paste the printed `easyMax` / `mediumMax` / `hardMax` into `DIFFICULTY_BOUNDS` in `web/lib/games.js`. The online app only needs those numbers. The dealt card paints one white dot, two red dots, three yellow dots, or four green dots for those four bands.
 
 
 ## Development
