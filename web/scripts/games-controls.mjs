@@ -4,25 +4,24 @@ import { canonicalDisplay } from "../lib/canonical.js";
 import { findAllSolutions } from "../lib/solver.js";
 import { solveComSearch } from "../lib/comsearch.js";
 import {
-  bandForCount,
-  countLabel,
+  BANDS,
+  DIFFICULTY_BOUNDS,
+  bandForDifficulty,
   dealCountdown,
   find24Puzzle,
   findCountdownPuzzle,
   matchesBand,
 } from "../lib/games.js";
 
-assert.equal(bandForCount(0), null);
-assert.equal(bandForCount(1), "hard");
-assert.equal(bandForCount(2), "hard");
-assert.equal(bandForCount(2.5), "medium");
-assert.equal(bandForCount(3), "medium");
-assert.equal(bandForCount(7), "medium");
-assert.equal(bandForCount(7.5), "medium");
-assert.equal(bandForCount(8), "easy");
-assert.equal(countLabel(8, "easy"), "8");
-assert.equal(countLabel(9, "easy"), "at least 9");
-assert.equal(countLabel(4, "medium"), "4");
+assert.equal(bandForDifficulty(0), null);
+assert.equal(bandForDifficulty(Number.NaN), null);
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.easyMax), "easy");
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.easyMax + 1e-9), "medium");
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.mediumMax), "medium");
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.mediumMax + 1e-9), "hard");
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.hardMax), "hard");
+assert.equal(bandForDifficulty(DIFFICULTY_BOUNDS.hardMax + 1e-9), "hardest");
+assert.deepEqual([...BANDS], ["easy", "medium", "hard", "hardest"]);
 
 for (let i = 0; i < 200; i++) {
   const dealt = dealCountdown();
@@ -59,23 +58,30 @@ assert.equal(deduped[0].value, 24);
 
 function solve(board, goal, maxSolutions) {
   return Promise.resolve(
-    solveComSearch(board, goal, maxSolutions, null, null, null, { dedupeRepeated: true }).solutions
+    (() => {
+      const result = solveComSearch(board, goal, maxSolutions, null, null, null, { dedupeRepeated: true });
+      const solutions = result.solutions;
+      solutions.difficulty = result.difficulty;
+      solutions.ideaCount = result.ideaCount;
+      return solutions;
+    })()
   );
 }
 
 const repeated = await solve([3, 3, 7, 7], 24, 20);
 assert.equal(repeated.length, 1);
-assert.equal(bandForCount(repeated.length), "hard");
+assert.ok(Number.isFinite(repeated.difficulty));
+assert.equal(bandForDifficulty(repeated.difficulty), "hardest");
 const repeatedRaw = solveComSearch([3, 3, 7, 7], 24, 20).solutions.length;
 assert.ok(repeatedRaw > repeated.length);
 
-for (const band of ["easy", "medium", "hard"]) {
+for (const band of BANDS) {
   const puzzle = await find24Puzzle(solve, band);
   assert.equal(puzzle.values.length, 4);
   assert.equal(puzzle.goal, 24);
-  assert.ok(matchesBand(puzzle.solutions.length, band), `${band} got ${puzzle.solutions.length}`);
+  assert.ok(matchesBand(puzzle.difficulty, band), `${band} got difficulty ${puzzle.difficulty}`);
   assert.ok(puzzle.solutions.every((solution) => solution.value === 24));
-  console.log(`${band}: ${puzzle.values.join(", ")} → ${puzzle.countText}`);
+  console.log(`${band}: ${puzzle.values.join(", ")} → difficulty ${puzzle.difficulty.toFixed(2)} (${puzzle.countText} lines)`);
 }
 
 const countdown = await findCountdownPuzzle(solve);

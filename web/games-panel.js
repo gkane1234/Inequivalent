@@ -1,10 +1,11 @@
 import { formatDifficulty } from "./lib/difficulty.js";
-import { find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
+import { DIFFICULTY_BOUNDS, find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
 
 const BANDS = [
   ["easy", "Easy"],
   ["medium", "Medium"],
   ["hard", "Hard"],
+  ["hardest", "Hardest"],
 ];
 
 /**
@@ -29,10 +30,11 @@ export function mountGames(engine) {
       <h3>24 game</h3>
       <p>
         Four numbers from 1 to 9. The goal is 24, and each number is used once.
-        The easy, medium, and hard buttons follow the number of solutions after deduping
-        repeated numbers: easy has more than 7.5, medium has between 2.5 and 7.5, and hard
-        has fewer than 2.5. The numbers also show an arithmetic difficulty. Lower is easier.
-        Lines that only move a 0 or a 1 count as one idea, and repeated numbers make it lower.
+        Easy, medium, hard, and hardest follow arithmetic difficulty cutoffs from the Java
+        1–13 board sweep (easy ≤ ${DIFFICULTY_BOUNDS.easyMax.toFixed(2)}, medium ≤
+        ${DIFFICULTY_BOUNDS.mediumMax.toFixed(2)}, hard ≤ ${DIFFICULTY_BOUNDS.hardMax.toFixed(2)},
+        hardest above that). Lower is easier. Lines that only move a 0 or a 1 count as one
+        idea, and repeated numbers make it lower.
       </p>
       <div class="modes" id="game24Bands" role="group" aria-label="24 game difficulty"></div>
       <div class="actions">
@@ -79,7 +81,7 @@ export function mountGames(engine) {
     answerCount: host.querySelector("#countdownAnswer"),
   };
 
-  els.engine.textContent = `Both games use this page's ${engine.engineName} solver. Deduping is on, so the 24-game bands count distinct lines.`;
+  els.engine.textContent = `Both games use this page's ${engine.engineName} solver. Deduping is on for deals, and the 24-game bands use difficulty strata.`;
 
   let band = "medium";
   let busy = false;
@@ -152,7 +154,7 @@ export function mountGames(engine) {
       });
       paintNumbers(els.numbers24, puzzle24.values, "24");
       els.status24.textContent = withDifficulty(
-        `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)}.`,
+        `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)} after dedupe.`,
         puzzle24
       );
     } catch (err) {
