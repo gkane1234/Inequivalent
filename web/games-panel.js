@@ -1,5 +1,5 @@
 import { formatDifficulty } from "./lib/difficulty.js";
-import { find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
+import { DIFFICULTY_BOUNDS, find24Puzzle, findCountdownPuzzle } from "./lib/games.js";
 import { wheelSvg } from "./lib/wheel.js";
 
 const BANDS = [
@@ -33,11 +33,11 @@ export function mountGames(engine) {
         Four numbers from 1 to 9. The goal is 24, and each number is used once.
         The card shows all four numbers upright. Corner dots mark the band: one white dot
         is easy, two red dots are medium, three yellow dots are hard, and four green dots
-        are hardest. After deduping repeated numbers, easy has more than 7.5 distinct
-        solutions, medium has from 2.5 through 7.5, hard has from 1.5 up to but not
-        including 2.5, and hardest has fewer than 1.5. The numbers also show an arithmetic
-        difficulty. Lower is easier. Lines that only move a 0 or a 1 count as one idea,
-        and repeated numbers make it lower.
+        are hardest. Those bands follow arithmetic difficulty from the Java 1–13 board
+        sweep (easy ≤ ${DIFFICULTY_BOUNDS.easyMax.toFixed(2)}, medium ≤
+        ${DIFFICULTY_BOUNDS.mediumMax.toFixed(2)}, hard ≤ ${DIFFICULTY_BOUNDS.hardMax.toFixed(2)},
+        hardest above that). Lower is easier. Lines that only move a 0 or a 1 count as one
+        idea, and repeated numbers make it lower.
       </p>
       <div class="modes" id="game24Bands" role="group" aria-label="24 game difficulty"></div>
       <div class="actions">
@@ -84,7 +84,7 @@ export function mountGames(engine) {
     answerCount: host.querySelector("#countdownAnswer"),
   };
 
-  els.engine.textContent = `Both games use this page's ${engine.engineName} solver. Deduping is on, so the 24-game bands count distinct lines.`;
+  els.engine.textContent = `Both games use this page's ${engine.engineName} solver. Deduping is on for deals, and the 24-game bands use difficulty strata.`;
 
   let band = "medium";
   let busy = false;
@@ -157,7 +157,7 @@ export function mountGames(engine) {
       });
       els.wheel24.innerHTML = wheelSvg(puzzle24.values, puzzle24.band);
       els.status24.textContent = withDifficulty(
-        `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)}.`,
+        `${labelOf(puzzle24.band)} board. ${solutionPhrase(puzzle24.countText)} after dedupe.`,
         puzzle24
       );
     } catch (err) {

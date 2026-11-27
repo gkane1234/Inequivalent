@@ -1,41 +1,43 @@
 /**
  * 24 game and Countdown numbers deals.
  * The solver is injected, so the same deals run on ComSearch or the expression list.
+ *
+ * 24-game bands use arithmetic difficulty cutoffs from the Java 1–13 sweep
+ * (DifficultyStrata). Recompute there when the difficulty equation changes, then
+ * paste the numbers into DIFFICULTY_BOUNDS.
  */
 
 export const GAME24_GOAL = 24;
 export const COUNTDOWN_LARGE = Object.freeze([25, 50, 75, 100]);
 
-/** How many deduped solutions to fetch before the band is known. */
-export function capForBand(band) {
-  if (band === "easy") return 9;
-  if (band === "medium") return 8;
-  if (band === "hard") return 3;
-  if (band === "hardest") return 2;
-  throw new Error(`Unknown difficulty ${band}`);
-}
+/**
+ * Numerical difficulty cutoffs from
+ * `mvn -f countingoperations/pom.xml exec:java -Dexec.mainClass=com.github.gkane1234.DifficultyStrata`
+ * with percentiles 60 / 85 / 95 over nondecreasing 4-tuples in [1, 13] → 24.
+ * easy ≤ easyMax, medium ≤ mediumMax, hard ≤ hardMax, hardest above hardMax.
+ */
+export const DIFFICULTY_BOUNDS = Object.freeze({
+  easyMax: 27.413335,
+  mediumMax: 48.099017,
+  hardMax: 61.534586,
+});
+
+export const BANDS = Object.freeze(["easy", "medium", "hard", "hardest"]);
 
 /**
- * Easy is more than 7.5 distinct solutions, medium is from 2.5 through 7.5,
- * hard is from 1.5 up to but not including 2.5, and hardest is fewer than 1.5.
- * Zero solutions is not a puzzle.
+ * @param {number} difficulty
+ * @returns {"easy"|"medium"|"hard"|"hardest"|null}
  */
-export function bandForCount(count) {
-  if (!(count > 0)) return null;
-  if (count > 7.5) return "easy";
-  if (count >= 2.5) return "medium";
-  if (count >= 1.5) return "hard";
+export function bandForDifficulty(difficulty, bounds = DIFFICULTY_BOUNDS) {
+  if (!Number.isFinite(difficulty) || !(difficulty > 0)) return null;
+  if (difficulty <= bounds.easyMax) return "easy";
+  if (difficulty <= bounds.mediumMax) return "medium";
+  if (difficulty <= bounds.hardMax) return "hard";
   return "hardest";
 }
 
-export function matchesBand(count, band) {
-  return bandForCount(count) === band;
-}
-
-export function countLabel(count, band) {
-  const cap = capForBand(band);
-  if (band === "easy" && count >= cap) return `at least ${count}`;
-  return String(count);
+export function matchesBand(difficulty, band, bounds = DIFFICULTY_BOUNDS) {
+  return bandForDifficulty(difficulty, bounds) === band;
 }
 
 export function deal24(random = Math.random) {
@@ -67,26 +69,27 @@ export function randomThreeDigit(random = Math.random) {
 }
 
 /**
- * @param {(values: number[], goal: number, maxSolutions: number) => Promise<{expression: string, value: number}[]>} solve
+ * @param {(values: number[], goal: number, maxSolutions: number) => Promise<{expression: string, value: number, difficulty?: number, ideaCount?: number}[]>} solve
  */
 export async function find24Puzzle(solve, band, options = {}) {
-  const cap = capForBand(band);
-  const maxAttempts = options.maxAttempts ?? 400;
+  if (!BANDS.includes(band)) throw new Error(`Unknown difficulty ${band}`);
+  const bounds = options.bounds ?? DIFFICULTY_BOUNDS;
+  const maxAttempts = options.maxAttempts ?? 800;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const values = deal24(options.random);
     options.onAttempt?.({ attempt, maxAttempts, values, goal: GAME24_GOAL });
-    const solutions = await solve(values, GAME24_GOAL, cap);
-    if (matchesBand(solutions.length, band)) {
-      const full = await solve(values, GAME24_GOAL, Number.POSITIVE_INFINITY);
+    const solutions = await solve(values, GAME24_GOAL, Number.POSITIVE_INFINITY);
+    const difficulty = solutions.difficulty;
+    if (matchesBand(difficulty, band, bounds)) {
       return {
         values,
         goal: GAME24_GOAL,
         solutions,
         band,
-        countText: countLabel(solutions.length, band),
+        countText: String(solutions.length),
         attempts: attempt,
-        difficulty: full.difficulty,
-        ideaCount: full.ideaCount,
+        difficulty,
+        ideaCount: solutions.ideaCount,
       };
     }
   }
